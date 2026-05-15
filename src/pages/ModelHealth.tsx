@@ -46,8 +46,8 @@ export default function ModelHealth() {
     mutationFn: () => modelHealthApi.triggerRetrain(),
     onSuccess: () => {
       setRetrainError('');
-      qc.invalidateQueries({ queryKey: ['pipeline-status'] });
-      qc.invalidateQueries({ queryKey: ['model-health', 'retrain-status'] });
+      void qc.invalidateQueries({ queryKey: ['pipeline-status'] });
+      void qc.invalidateQueries({ queryKey: ['model-health', 'retrain-status'] });
     },
     onError: () => setRetrainError('Failed to trigger retrain. Please try again.'),
   });
@@ -110,7 +110,7 @@ export default function ModelHealth() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                 <YAxis domain={[0, 1]} tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(v: unknown) => (typeof v === 'number' ? `${(v * 100).toFixed(1)}%` : String(v ?? ''))} />
+                <Tooltip formatter={(v: unknown) => (typeof v === 'number' ? `${(v * 100).toFixed(1)}%` : '')} />
                 <Legend />
                 <Line type="monotone" dataKey="macroF1" stroke="#6366f1" dot={false} name="Macro F1" />
               </LineChart>

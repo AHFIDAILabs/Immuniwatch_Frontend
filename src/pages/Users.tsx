@@ -7,7 +7,7 @@ import { FullPageSpinner } from '../components/Spinner';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { formatDateTime, ROLE_LABELS } from '../lib/utils';
-import type { User, UserRole } from '../types/api';
+import type { UserRole } from '../types/api';
 
 function InviteModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
@@ -20,7 +20,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
   const { mutate, isPending } = useMutation({
     mutationFn: () => usersApi.invite({ name, email, role, password }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['users'] });
+      void qc.invalidateQueries({ queryKey: ['users'] });
       onClose();
     },
     onError: () => setError('Failed to create user. Email may already be in use.'),
@@ -101,7 +101,7 @@ export default function Users() {
   const { mutate: toggleActive } = useMutation({
     mutationFn: ({ id, active }: { id: string; active: boolean }) =>
       usersApi.update(id, { active }),
-    onSuccess: () => { setToggleError(''); qc.invalidateQueries({ queryKey: ['users'] }); },
+    onSuccess: () => { setToggleError(''); void qc.invalidateQueries({ queryKey: ['users'] }); },
     onError: () => setToggleError('Failed to update user status.'),
   });
 
@@ -138,7 +138,7 @@ export default function Users() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {(users as User[]).map((user) => (
+              {users.map((user) => (
                 <tr key={user._id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3 font-medium text-gray-800">{user.name}</td>
                   <td className="px-4 py-3 text-gray-600">{user.email}</td>

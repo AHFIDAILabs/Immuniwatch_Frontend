@@ -76,7 +76,9 @@ export default function AuditLog() {
                 {entries.map((entry) => (
                   <tr key={entry._id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3">
-                      <p className="font-medium text-gray-800">{entry.actorName ?? String(entry.actor)}</p>
+                      <p className="font-medium text-gray-800">
+                        {entry.actorName ?? (typeof entry.actor === 'string' ? entry.actor : entry.actor.name)}
+                      </p>
                       {entry.actorRole && (
                         <p className="text-xs text-gray-400 capitalize">{entry.actorRole}</p>
                       )}

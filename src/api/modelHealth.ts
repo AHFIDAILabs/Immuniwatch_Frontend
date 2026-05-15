@@ -15,7 +15,7 @@ export const modelHealthApi = {
     api.post<{ status: string }>('/model-health/retrain', { reason }).then((r) => r.data),
 
   getRecentFeedback: (limit = 10) =>
-    api.get('/model-health/recent-feedback', { params: { limit } }).then((r) => r.data),
+    api.get<import('../types/api').FeedbackItem[]>('/model-health/recent-feedback', { params: { limit } }).then((r) => r.data),
 
   getPipelineStatus: () =>
     api.get<PipelineStatus>('/pipeline/status').then((r) => r.data),

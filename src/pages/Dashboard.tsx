@@ -57,7 +57,7 @@ function AnalystView() {
 
   const { data: hitlPending } = useQuery({
     queryKey: ['hitl', 'pending-count'],
-    queryFn: () => hitlApi.list({ page: 1, limit: 1, status: 'pending' as never }),
+    queryFn: () => hitlApi.list({ page: 1, limit: 1, status: 'pending' }),
     staleTime: 30_000,
   });
 
@@ -126,7 +126,7 @@ function AnalystView() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {narratives.map((n: { narrative: string; count: number; label: string }, i: number) => (
-                  <tr key={i} className="hover:bg-gray-50">
+                  <tr key={n.narrative} className="hover:bg-gray-50">
                     <td className="py-2 text-gray-400 font-bold">{i + 1}</td>
                     <td className="py-2 text-gray-800 pr-2">
                       <p className="line-clamp-2 leading-snug">{n.narrative}</p>
@@ -221,7 +221,7 @@ function SeniorAnalystView() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {narratives.map((n: { narrative: string; count: number; label: string }, i: number) => (
-                  <tr key={i} className="hover:bg-gray-50">
+                  <tr key={n.narrative} className="hover:bg-gray-50">
                     <td className="py-2 text-gray-400 font-bold">{i + 1}</td>
                     <td className="py-2 text-gray-800 pr-2">
                       <p className="line-clamp-2 leading-snug">{n.narrative}</p>
@@ -317,7 +317,7 @@ function SupervisorView() {
             {teamStats?.topReviewers?.length ? (
               <div className="space-y-2">
                 {teamStats.topReviewers.map((r, i) => (
-                  <div key={i} className="flex items-center justify-between text-xs">
+                  <div key={r.name} className="flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2">
                       <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
                         {i + 1}
@@ -397,7 +397,7 @@ function SuperAdminView() {
 
   const { data: hitlPending } = useQuery({
     queryKey: ['hitl', 'pending-count'],
-    queryFn:  () => hitlApi.list({ page: 1, limit: 1, status: 'pending' as never }),
+    queryFn:  () => hitlApi.list({ page: 1, limit: 1, status: 'pending' }),
     staleTime: 30_000,
   });
 
@@ -510,7 +510,7 @@ function SuperAdminView() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {narratives.map((n: { narrative: string; count: number; label: string; trend?: number[] }, i: number) => (
-                  <tr key={i} className="hover:bg-gray-50">
+                  <tr key={n.narrative} className="hover:bg-gray-50">
                     <td className="py-2.5 text-gray-400 font-bold pr-2">{i + 1}</td>
                     <td className="py-2.5 text-gray-800 pr-3">
                       <p className="line-clamp-1 leading-snug">{n.narrative}</p>
@@ -608,7 +608,7 @@ function SuperAdminView() {
             <h2 className="text-xs font-semibold text-gray-700 mb-3">Top reviewers today</h2>
             <div className="space-y-2">
               {teamStats.topReviewers.map((r, i) => (
-                <div key={i} className="flex items-center justify-between text-xs">
+                <div key={r.name} className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-2">
                     <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
                       {i + 1}

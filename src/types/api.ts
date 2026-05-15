@@ -165,6 +165,52 @@ export interface Paginated<T> {
   totalPages: number;
 }
 
+// ── Trends ───────────────────────────────────────────────────────────────────
+
+export interface ClassificationBreakdownItem {
+  label: ClassificationLabel;
+  count: number;
+}
+
+export interface NarrativeItem {
+  narrative: string;
+  count: number;
+  label: ClassificationLabel;
+  trend: number[];
+}
+
+export interface PlatformIngestionItem {
+  _id: string;
+  count: number;
+}
+
+export interface LanguageDistributionItem {
+  _id: PostLanguage;
+  count: number;
+}
+
+export interface DailyMisinformationItem {
+  date: string;
+  count: number;
+}
+
+export interface DailyBreakdownItem {
+  date: string;
+  day: string;
+  misinformation: number;
+  disinformation: number;
+  factual: number;
+  irrelevant: number;
+}
+
+export interface FeedbackItem {
+  _id: string;
+  postId: string;
+  originalLabel: ClassificationLabel;
+  correctedLabel: ClassificationLabel;
+  createdAt: string;
+}
+
 // ── HITL stats ────────────────────────────────────────────────────────────────
 
 export interface HITLMyStats {

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, use, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { authApi } from '../api/auth';
 import type { AuthUser } from '../types/api';
 
@@ -35,14 +35,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
+    <AuthContext value={{ user, isLoading, login, logout }}>
       {children}
-    </AuthContext.Provider>
+    </AuthContext>
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
-  const ctx = useContext(AuthContext);
+  const ctx = use(AuthContext);
   if (!ctx) throw new Error('useAuth must be used inside AuthProvider');
   return ctx;
 }

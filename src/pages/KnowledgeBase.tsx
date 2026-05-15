@@ -23,7 +23,7 @@ function UploadModal({ onClose }: { onClose: () => void }) {
   const { mutate, isPending, isError } = useMutation({
     mutationFn: () => kbApi.upload(file!, { title, source, language, immediate }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['kb'] });
+      void qc.invalidateQueries({ queryKey: ['kb'] });
       onClose();
     },
   });
@@ -118,13 +118,13 @@ export default function KnowledgeBase() {
 
   const { mutate: deleteDoc } = useMutation({
     mutationFn: (id: string) => kbApi.delete(id),
-    onSuccess: () => { setActionError(''); qc.invalidateQueries({ queryKey: ['kb'] }); },
+    onSuccess: () => { setActionError(''); void qc.invalidateQueries({ queryKey: ['kb'] }); },
     onError: () => setActionError('Failed to delete document.'),
   });
 
   const { mutate: reindex, isPending: reindexing } = useMutation({
     mutationFn: () => kbApi.reindex(),
-    onSuccess: () => { setActionError(''); qc.invalidateQueries({ queryKey: ['kb'] }); },
+    onSuccess: () => { setActionError(''); void qc.invalidateQueries({ queryKey: ['kb'] }); },
     onError: () => setActionError('Reindex failed. Please try again.'),
   });
 
@@ -214,7 +214,7 @@ export default function KnowledgeBase() {
                     </td>
                     <td className="px-4 py-3 text-gray-600">{doc.source}</td>
                     <td className="px-4 py-3 text-gray-600">
-                      {LANG_FLAGS[doc.language as PostLanguage] ?? ''} {doc.language?.toUpperCase()}
+                      {LANG_FLAGS[doc.language] ?? ''} {doc.language?.toUpperCase()}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`text-xs font-medium capitalize px-2 py-0.5 rounded ${

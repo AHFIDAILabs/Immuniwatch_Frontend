@@ -30,8 +30,7 @@ export default function Submit() {
   const [success,       setSuccess]       = useState(false);
   const [error,         setError]         = useState('');
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit() {
     setError('');
     if (content.trim().length < 10) {
       setError('Please provide at least 10 characters of content.');
@@ -42,10 +41,9 @@ export default function Submit() {
       await axios.post('/api/submit', { content, platformSeen, language, sourceUrl, submitterNote });
       setSuccess(true);
     } catch (err) {
-      const msg = axios.isAxiosError(err)
-        ? (err.response?.data?.error ?? err.response?.data?.message ?? 'Submission failed. Please try again.')
-        : 'Submission failed. Please try again.';
-      setError(msg);
+      const data = axios.isAxiosError(err) ? (err.response?.data as Record<string, unknown> | undefined) : undefined;
+      const apiMsg = typeof data?.error === 'string' ? data.error : typeof data?.message === 'string' ? data.message : null;
+      setError(apiMsg ?? 'Submission failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -99,7 +97,7 @@ export default function Submit() {
             and may result in an official correction.
           </p>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={(e) => { e.preventDefault(); void handleSubmit(); }} className="space-y-4">
             {/* Content */}
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1.5">

@@ -17,19 +17,6 @@ interface NavItem {
   hitlBadge?: boolean;
 }
 
-// ── Role hierarchy helper ─────────────────────────────────────────────────────
-
-const ROLE_RANK: Record<UserRole, number> = {
-  analyst:        1,
-  senior_analyst: 2,
-  supervisor:     3,
-  super_admin:    4,
-};
-
-function atLeast(min: UserRole, role: UserRole) {
-  return ROLE_RANK[role] >= ROLE_RANK[min];
-}
-
 // ── Navigation definition ─────────────────────────────────────────────────────
 
 const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
@@ -102,7 +89,7 @@ export function Sidebar() {
 
   const { data: hitlData } = useQuery({
     queryKey: ['hitl', 'pending-count'],
-    queryFn:  () => hitlApi.list({ page: 1, limit: 1, status: 'pending' as never }),
+    queryFn:  () => hitlApi.list({ page: 1, limit: 1, status: 'pending' }),
     refetchInterval: 60_000,
     staleTime:       30_000,
   });
@@ -182,7 +169,7 @@ export function Sidebar() {
           </div>
         </div>
         <button
-          onClick={logout}
+          onClick={() => { void logout(); }}
           className="flex items-center gap-1.5 w-full text-[11px] text-gray-400 hover:text-gray-700 transition-colors"
         >
           <LogOut className="h-3 w-3" />

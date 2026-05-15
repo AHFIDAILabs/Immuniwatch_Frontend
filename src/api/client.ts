@@ -1,29 +1,31 @@
-import axios from 'axios';
+import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 
 export const api = axios.create({
   baseURL:         '/api',
-  withCredentials: true,          // send HttpOnly cookies on every request
+  withCredentials: true,
   headers:         { 'Content-Type': 'application/json' },
 });
 
 // ── Silent token refresh on 401 ───────────────────────────────────────────────
 
 let isRefreshing = false;
-let pendingQueue: Array<{ resolve: () => void; reject: (err: unknown) => void }> = [];
+let pendingQueue: Array<{ resolve: () => void; reject: (err: Error) => void }> = [];
 
-function drainQueue(err: unknown) {
+function drainQueue(err: Error | null) {
   pendingQueue.forEach(({ resolve, reject }) => (err ? reject(err) : resolve()));
   pendingQueue = [];
 }
 
+type RetryConfig = InternalAxiosRequestConfig & { _retry?: boolean };
+
 api.interceptors.response.use(
   (res) => res,
-  async (err) => {
-    const original = err.config;
+  async (err: AxiosError) => {
+    const original = err.config as RetryConfig | undefined;
 
-    // Don't retry non-401s, already-retried requests, or the refresh call itself
     if (
       err.response?.status !== 401 ||
+      !original ||
       original._retry ||
       original.url?.includes('/auth/refresh')
     ) {
@@ -35,23 +37,23 @@ api.interceptors.response.use(
         pendingQueue.push({ resolve, reject });
       })
         .then(() => api(original))
-        .catch((e) => Promise.reject(e));
+        .catch((e: unknown) => Promise.reject(e instanceof Error ? e : new Error(String(e))));
     }
 
     original._retry = true;
     isRefreshing    = true;
 
     try {
-      // The refresh_token cookie is sent automatically (it's HttpOnly)
       await axios.post('/api/auth/refresh', {}, { withCredentials: true });
       drainQueue(null);
       return api(original);
-    } catch (refreshErr) {
-      drainQueue(refreshErr);
+    } catch (refreshErr: unknown) {
+      const asError = refreshErr instanceof Error ? refreshErr : new Error(String(refreshErr));
+      drainQueue(asError);
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
-      return Promise.reject(refreshErr);
+      return Promise.reject(asError);
     } finally {
       isRefreshing = false;
     }

@@ -167,7 +167,7 @@ export default function TrendAnalysis() {
                 <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} width={28} unit="%" />
                 <Tooltip
                   contentStyle={{ fontSize: 11, borderRadius: 8 }}
-                  formatter={(v: unknown) => [`${v}%`, 'Share']}
+                  formatter={(v: unknown) => [typeof v === 'number' ? `${v}%` : '', 'Share']}
                 />
                 <Bar dataKey="pct" radius={[4, 4, 0, 0]}>
                   {langRows.map((row) => (
@@ -187,7 +187,7 @@ export default function TrendAnalysis() {
           {narratives?.length ? (
             <div className="space-y-2">
               {narratives.map((n: { narrative: string; count: number; label: string }, i: number) => (
-                <div key={i} className="flex items-start gap-2.5 p-2 rounded-lg bg-gray-50">
+                <div key={n.narrative} className="flex items-start gap-2.5 p-2 rounded-lg bg-gray-50">
                   <span className="text-[10px] font-bold text-gray-400 w-4 flex-shrink-0 mt-0.5">{i + 1}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-gray-800 leading-snug line-clamp-2">{n.narrative}</p>

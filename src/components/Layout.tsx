@@ -32,7 +32,7 @@ const NOTIFICATIONS = [
 export function Layout() {
   const location = useLocation();
   const [notifOpen, setNotifOpen] = useState(false);
-  const [readIds, setReadIds]     = useState<Set<number>>(new Set());
+  const [readIds, setReadIds]     = useState<Set<number>>(() => new Set());
   const panelRef = useRef<HTMLDivElement>(null);
 
   const title  = PAGE_TITLES[location.pathname] ?? 'Overview';

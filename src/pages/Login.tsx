@@ -12,8 +12,7 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit() {
     setError('');
     setLoading(true);
     try {
@@ -40,7 +39,7 @@ export default function Login() {
         <div className="glass-card shadow-sm p-6">
           <h1 className="text-base font-semibold text-gray-900 mb-5">Sign in to your account</h1>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={(e) => { e.preventDefault(); void handleSubmit(); }} className="space-y-4">
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1.5">Email</label>
               <input

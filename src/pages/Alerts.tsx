@@ -25,7 +25,7 @@ export default function Alerts() {
 
   const { mutate: resolve } = useMutation({
     mutationFn: (id: string) => alertsApi.resolve(id),
-    onSuccess: () => { setResolveError(''); qc.invalidateQueries({ queryKey: ['alerts'] }); },
+    onSuccess: () => { setResolveError(''); void qc.invalidateQueries({ queryKey: ['alerts'] }); },
     onError: () => setResolveError('Failed to resolve alert. Please try again.'),
   });
 

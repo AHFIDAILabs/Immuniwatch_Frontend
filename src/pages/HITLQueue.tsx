@@ -26,7 +26,7 @@ function OverrideModal({ review, onClose }: { review: HITLReview; onClose: () =>
   const { mutate, isPending } = useMutation({
     mutationFn: () =>
       hitlApi.override(review._id, { overrideLabel: label, editedResponse: response, reviewerNote: note }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['hitl'] }); onClose(); },
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['hitl'] }); onClose(); },
   });
 
   return (
@@ -114,7 +114,7 @@ function DispatchModal({
           />
           <div className="flex justify-end gap-2">
             <button
-              onClick={copyToClipboard}
+              onClick={() => { void copyToClipboard(); }}
               className={`flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium transition-colors ${
                 copied
                   ? 'bg-emerald-600 text-white'
@@ -191,7 +191,7 @@ export default function HITLQueue() {
       hitlApi.list({
         page,
         limit:    PAGE_SIZE,
-        status:   'pending' as never,
+        status:   'pending',
         priority: priorityFilter === 'all' ? undefined : priorityFilter,
       }),
     placeholderData: (prev) => prev,
@@ -201,7 +201,7 @@ export default function HITLQueue() {
     mutationFn: (id: string) => hitlApi.approve(id),
     onSuccess: (approved) => {
       setMutationError('');
-      qc.invalidateQueries({ queryKey: ['hitl'] });
+      void qc.invalidateQueries({ queryKey: ['hitl'] });
       setDispatchTarget(approved);
     },
     onError: () => setMutationError('Failed to approve. Please try again.'),
@@ -209,12 +209,12 @@ export default function HITLQueue() {
 
   const { mutate: reject } = useMutation({
     mutationFn: (id: string) => hitlApi.reject(id),
-    onSuccess: () => { setMutationError(''); qc.invalidateQueries({ queryKey: ['hitl'] }); },
+    onSuccess: () => { setMutationError(''); void qc.invalidateQueries({ queryKey: ['hitl'] }); },
     onError:   () => setMutationError('Failed to reject. Please try again.'),
   });
 
   const reviews: HITLReview[] = data?.data ?? [];
-  reviewsRef.current = reviews;
+  useEffect(() => { reviewsRef.current = reviews; });
 
   const total      = data?.total ?? 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -302,7 +302,7 @@ export default function HITLQueue() {
               const confidence = cls?.confidence ?? 0;
               const kbEvidence = cls?.kbEvidence ?? [];
               const isFocused  = focusedId === review._id;
-              const postId     = (post as { _id?: string })?._id ?? (typeof review.postId === 'string' ? review.postId : '');
+              const postId     = post?._id ?? (typeof review.postId === 'string' ? review.postId : '');
 
               return (
                 <div
