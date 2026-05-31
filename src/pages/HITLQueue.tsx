@@ -1,6 +1,6 @@
-﻿import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, X, Edit3, Copy, CheckCheck } from 'lucide-react';
+import { Check, X, Edit3, Copy, CheckCheck, Loader2 } from 'lucide-react';
 import { hitlApi } from '../api/hitl';
 import { api } from '../api/client';
 import { LabelBadge, PriorityBadge, StatusBadge } from '../components/Badge';
@@ -8,25 +8,42 @@ import { FullPageSpinner } from '../components/Spinner';
 import { EmptyState } from '../components/EmptyState';
 import { Modal } from '../components/Modal';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { useToast } from '../context/ToastContext';
 import { formatRelative, LANG_LABELS, PLATFORM_LABELS, LABEL_META } from '../lib/utils';
 import type { HITLReview, ClassificationLabel, HITLPriority, PostLanguage, PostPlatform } from '../types/api';
 
 const PAGE_SIZE = 20;
 
+// ── Axios error helper ────────────────────────────────────────────────────────
+
+function apiMessage(err: unknown, fallback: string): string {
+  const msg =
+    (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+  return msg ?? fallback;
+}
+
 // ── Override modal ────────────────────────────────────────────────────────────
 
 function OverrideModal({ review, onClose }: { review: HITLReview; onClose: () => void }) {
-  const qc = useQueryClient();
-  const [label, setLabel] = useState<ClassificationLabel>(
+  const qc    = useQueryClient();
+  const toast = useToast().toast;
+  const [label,    setLabel]    = useState<ClassificationLabel>(
     (review.classificationId as { label: ClassificationLabel }).label ?? 'irrelevant',
   );
   const [response, setResponse] = useState('');
-  const [note, setNote]         = useState('');
+  const [note,     setNote]     = useState('');
 
   const { mutate, isPending } = useMutation({
     mutationFn: () =>
       hitlApi.override(review._id, { overrideLabel: label, editedResponse: response, reviewerNote: note }),
-    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['hitl'] }); onClose(); },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['hitl'] });
+      toast.success('Override submitted', `Label corrected to "${label}"`);
+      onClose();
+    },
+    onError: (err) => {
+      toast.error('Override failed', apiMessage(err, 'Could not submit the override. Please try again.'));
+    },
   });
 
   return (
@@ -44,7 +61,9 @@ function OverrideModal({ review, onClose }: { review: HITLReview; onClose: () =>
         </select>
       </div>
       <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1.5">Corrected Response <span className="text-gray-400">(optional)</span></label>
+        <label className="block text-xs font-medium text-gray-700 mb-1.5">
+          Corrected Response <span className="text-gray-400">(optional)</span>
+        </label>
         <textarea
           value={response}
           onChange={(e) => setResponse(e.target.value)}
@@ -54,7 +73,9 @@ function OverrideModal({ review, onClose }: { review: HITLReview; onClose: () =>
         />
       </div>
       <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1.5">Reviewer Note</label>
+        <label className="block text-xs font-medium text-gray-700 mb-1.5">
+          Reviewer Note <span className="text-gray-400">(optional)</span>
+        </label>
         <input
           value={note}
           onChange={(e) => setNote(e.target.value)}
@@ -63,12 +84,21 @@ function OverrideModal({ review, onClose }: { review: HITLReview; onClose: () =>
         />
       </div>
       <div className="flex justify-end gap-2 pt-2">
-        <button onClick={onClose} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+        <button
+          onClick={onClose}
+          disabled={isPending}
+          className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+        >
+          Cancel
+        </button>
         <button
           onClick={() => mutate()}
           disabled={isPending}
-          className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-60"
-        >Submit Override</button>
+          className="flex items-center gap-1.5 px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-60"
+        >
+          {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          Submit Override
+        </button>
       </div>
     </div>
   );
@@ -76,17 +106,11 @@ function OverrideModal({ review, onClose }: { review: HITLReview; onClose: () =>
 
 // ── Dispatch copy modal (shown after approve) ─────────────────────────────────
 
-function DispatchModal({
-  review,
-  onClose,
-}: {
-  review: HITLReview;
-  onClose: () => void;
-}) {
+function DispatchModal({ review, onClose }: { review: HITLReview; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
-  const cls = review.classificationId as { suggestedResponse?: string } | null;
-  const post = review.postId as { platform?: PostPlatform } | null;
-  const response = cls?.suggestedResponse ?? '';
+  const cls      = review.classificationId as { suggestedResponse?: string; approvedResponse?: string } | null;
+  const post     = review.postId as { platform?: PostPlatform } | null;
+  const response = review.approvedResponse ?? cls?.suggestedResponse ?? cls?.approvedResponse ?? '';
   const platformLabel = post?.platform ? (PLATFORM_LABELS[post.platform] ?? post.platform) : 'platform';
 
   async function copyToClipboard() {
@@ -94,9 +118,7 @@ function DispatchModal({
       await navigator.clipboard.writeText(response);
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
-    } catch {
-      // fallback — select the textarea content
-    }
+    } catch { /* browser may block */ }
   }
 
   return (
@@ -130,20 +152,22 @@ function DispatchModal({
           </div>
         </>
       ) : (
-        <div className="text-sm text-gray-500 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
-          No suggested response generated. Draft your own response before posting.
-        </div>
-      )}
-      {!response && (
-        <div className="flex justify-end">
-          <button onClick={onClose} className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">Done</button>
-        </div>
+        <>
+          <div className="text-sm text-gray-500 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
+            No suggested response generated. Draft your own response before posting.
+          </div>
+          <div className="flex justify-end">
+            <button onClick={onClose} className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
+              Done
+            </button>
+          </div>
+        </>
       )}
     </div>
   );
 }
 
-// ── Context strip (similar posts in 24 h) ─────────────────────────────────────
+// ── Similar-post context strip ────────────────────────────────────────────────
 
 function ContextStrip({ postId }: { postId: string }) {
   const { data } = useQuery({
@@ -176,13 +200,15 @@ function ContextStrip({ postId }: { postId: string }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function HITLQueue() {
-  const qc = useQueryClient();
-  const [page, setPage]                       = useState(1);
-  const [priorityFilter, setPriorityFilter]   = useState<HITLPriority | 'all'>('all');
-  const [overrideTarget, setOverrideTarget]   = useState<HITLReview | null>(null);
-  const [dispatchTarget, setDispatchTarget]   = useState<HITLReview | null>(null);
-  const [focusedId, setFocusedId]             = useState<string | null>(null);
-  const [mutationError, setMutationError]     = useState('');
+  const qc    = useQueryClient();
+  const toast = useToast().toast;
+
+  const [page,           setPage]           = useState(1);
+  const [priorityFilter, setPriorityFilter] = useState<HITLPriority | 'all'>('all');
+  const [overrideTarget, setOverrideTarget] = useState<HITLReview | null>(null);
+  const [dispatchTarget, setDispatchTarget] = useState<HITLReview | null>(null);
+  const [focusedId,      setFocusedId]      = useState<string | null>(null);
+  const [actingIds,      setActingIds]      = useState<Set<string>>(new Set());
   const reviewsRef = useRef<HITLReview[]>([]);
 
   const { data, isLoading, isFetching, isError } = useQuery({
@@ -197,20 +223,36 @@ export default function HITLQueue() {
     placeholderData: (prev) => prev,
   });
 
+  function startAction(id: string) { setActingIds((s) => new Set(s).add(id)); }
+  function endAction(id: string)   { setActingIds((s) => { const n = new Set(s); n.delete(id); return n; }); }
+
   const { mutate: approve } = useMutation({
     mutationFn: (id: string) => hitlApi.approve(id),
-    onSuccess: (approved) => {
-      setMutationError('');
+    onMutate:   (id) => startAction(id),
+    onSuccess:  (approved, id) => {
+      endAction(id);
       void qc.invalidateQueries({ queryKey: ['hitl'] });
+      toast.success('Review approved', 'The post has been marked for dispatch.');
       setDispatchTarget(approved);
     },
-    onError: () => setMutationError('Failed to approve. Please try again.'),
+    onError: (err, id) => {
+      endAction(id);
+      toast.error('Approve failed', apiMessage(err, 'Could not approve the review. Please try again.'));
+    },
   });
 
   const { mutate: reject } = useMutation({
     mutationFn: (id: string) => hitlApi.reject(id),
-    onSuccess: () => { setMutationError(''); void qc.invalidateQueries({ queryKey: ['hitl'] }); },
-    onError:   () => setMutationError('Failed to reject. Please try again.'),
+    onMutate:   (id) => startAction(id),
+    onSuccess:  (_data, id) => {
+      endAction(id);
+      void qc.invalidateQueries({ queryKey: ['hitl'] });
+      toast.success('Review rejected', 'Post removed from the queue.');
+    },
+    onError: (err, id) => {
+      endAction(id);
+      toast.error('Reject failed', apiMessage(err, 'Could not reject the review. Please try again.'));
+    },
   });
 
   const reviews: HITLReview[] = data?.data ?? [];
@@ -219,23 +261,28 @@ export default function HITLQueue() {
   const total      = data?.total ?? 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
-  // ── Keyboard shortcuts ──────────────────────────────────────────────────────
+  // ── Keyboard shortcuts ────────────────────────────────────────────────────
 
   const handleKey = useCallback((e: KeyboardEvent) => {
-    // Don't fire when user is typing in an input/textarea
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
     const id = focusedId ?? reviewsRef.current[0]?._id;
     if (!id) return;
 
-    if (e.key === 'a' || e.key === 'A') { e.preventDefault(); approve(id); }
-    if (e.key === 'r' || e.key === 'R') { e.preventDefault(); reject(id); }
+    if ((e.key === 'a' || e.key === 'A') && !actingIds.has(id)) {
+      e.preventDefault();
+      approve(id);
+    }
+    if ((e.key === 'r' || e.key === 'R') && !actingIds.has(id)) {
+      e.preventDefault();
+      reject(id);
+    }
     if (e.key === 'o' || e.key === 'O') {
       e.preventDefault();
       const target = reviewsRef.current.find((rv) => rv._id === id);
       if (target) setOverrideTarget(target);
     }
-  }, [focusedId, approve, reject]);
+  }, [focusedId, actingIds, approve, reject]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKey);
@@ -255,7 +302,8 @@ export default function HITLQueue() {
         <div>
           <h1 className="text-base font-semibold text-gray-900">HITL review queue</h1>
           <p className="text-[11px] text-gray-400 mt-0.5">
-            Keyboard: <kbd className="px-1 py-0.5 bg-gray-100 border border-gray-300 rounded text-[10px]">A</kbd> approve ·{' '}
+            Keyboard:{' '}
+            <kbd className="px-1 py-0.5 bg-gray-100 border border-gray-300 rounded text-[10px]">A</kbd> approve ·{' '}
             <kbd className="px-1 py-0.5 bg-gray-100 border border-gray-300 rounded text-[10px]">R</kbd> reject ·{' '}
             <kbd className="px-1 py-0.5 bg-gray-100 border border-gray-300 rounded text-[10px]">O</kbd> override
           </p>
@@ -275,8 +323,7 @@ export default function HITLQueue() {
         </div>
       </div>
 
-      {isError       && <ErrorBanner message="Failed to load HITL queue." />}
-      {mutationError && <ErrorBanner message={mutationError} />}
+      {isError && <ErrorBanner message="Failed to load HITL queue." />}
 
       {isLoading ? (
         <FullPageSpinner />
@@ -302,6 +349,7 @@ export default function HITLQueue() {
               const confidence = cls?.confidence ?? 0;
               const kbEvidence = cls?.kbEvidence ?? [];
               const isFocused  = focusedId === review._id;
+              const isActing   = actingIds.has(review._id);
               const postId     = post?._id ?? (typeof review.postId === 'string' ? review.postId : '');
 
               return (
@@ -311,7 +359,7 @@ export default function HITLQueue() {
                   onMouseLeave={() => setFocusedId(null)}
                   className={`bg-white rounded-xl border p-4 transition-colors ${
                     isFocused ? 'border-emerald-400 shadow-sm' : 'border-gray-200'
-                  }`}
+                  } ${isActing ? 'opacity-60' : ''}`}
                 >
                   {/* Header */}
                   <div className="flex items-center gap-2 mb-3 flex-wrap">
@@ -374,25 +422,30 @@ export default function HITLQueue() {
                   {review.status === 'pending' ? (
                     <div className="flex gap-2 flex-wrap">
                       <button
-                        onClick={() => approve(review._id)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+                        onClick={() => { if (!isActing) approve(review._id); }}
+                        disabled={isActing}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed"
                         title="Approve (A)"
                       >
-                        <Check className="h-3.5 w-3.5" /> Approve
+                        {isActing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                        Approve
                       </button>
                       <button
-                        onClick={() => setOverrideTarget(review)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-amber-400 text-amber-700 rounded-lg hover:bg-amber-50"
+                        onClick={() => { if (!isActing) setOverrideTarget(review); }}
+                        disabled={isActing}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-amber-400 text-amber-700 rounded-lg hover:bg-amber-50 disabled:opacity-60 disabled:cursor-not-allowed"
                         title="Override label (O)"
                       >
                         <Edit3 className="h-3.5 w-3.5" /> Override label
                       </button>
                       <button
-                        onClick={() => reject(review._id)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-300 text-gray-500 rounded-lg hover:bg-gray-50"
+                        onClick={() => { if (!isActing) reject(review._id); }}
+                        disabled={isActing}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-300 text-gray-500 rounded-lg hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed"
                         title="Reject (R)"
                       >
-                        <X className="h-3.5 w-3.5" /> Reject
+                        {isActing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+                        Reject
                       </button>
                     </div>
                   ) : (
@@ -407,10 +460,16 @@ export default function HITLQueue() {
             <div className="flex items-center justify-between glass-card px-4 py-3">
               <span className="text-xs text-gray-500">Page {page} of {totalPages}</span>
               <div className="flex gap-2">
-                <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1 || isFetching}
-                  className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-50">Previous</button>
-                <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages || isFetching}
-                  className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-50">Next</button>
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1 || isFetching}
+                  className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-50"
+                >Previous</button>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages || isFetching}
+                  className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-50"
+                >Next</button>
               </div>
             </div>
           )}

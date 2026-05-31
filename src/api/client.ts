@@ -27,7 +27,8 @@ api.interceptors.response.use(
       err.response?.status !== 401 ||
       !original ||
       original._retry ||
-      original.url?.includes('/auth/refresh')
+      original.url?.includes('/auth/refresh') ||
+      original.url?.includes('/auth/login')
     ) {
       return Promise.reject(err);
     }

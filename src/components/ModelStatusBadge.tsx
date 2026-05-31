@@ -5,6 +5,7 @@ const STATUS_STYLES: Record<PipelineStatus['status'], string> = {
   degraded:   'bg-yellow-100 text-yellow-700',
   fallback:   'bg-orange-100 text-orange-700',
   retraining: 'bg-blue-100 text-blue-700',
+  mock:       'bg-amber-100 text-amber-700',
 };
 
 const STATUS_LABELS: Record<PipelineStatus['status'], string> = {
@@ -12,6 +13,7 @@ const STATUS_LABELS: Record<PipelineStatus['status'], string> = {
   degraded:   'Degraded',
   fallback:   'Fallback Mode',
   retraining: 'Retraining',
+  mock:       'Mock Mode',
 };
 
 export function ModelStatusBadge({ status }: { status: PipelineStatus['status'] }) {

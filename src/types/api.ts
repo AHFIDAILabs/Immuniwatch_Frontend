@@ -1,13 +1,33 @@
+// Changes vs. original:
+//   • LanguageMetrics: sampleCount now optional (not in ML service v1.0.0 response),
+//     recall field added
+//   • AppSettings: new type for the /settings endpoint
+//   • PipelineStatus.status: added 'mock' state (when ML_MOCK_MODE=true)
+
 // ── Enums (mirror backend) ────────────────────────────────────────────────────
 
-export type UserRole = 'analyst' | 'senior_analyst' | 'supervisor' | 'super_admin';
-export type PostPlatform = 'twitter' | 'facebook' | 'youtube' | 'submission';
-export type PostLanguage = 'en' | 'pcm' | 'ha' | 'yo' | 'ig';
-export type ClassificationLabel = 'misinformation' | 'disinformation' | 'factual' | 'irrelevant' | 'pending';
-export type HITLPriority = 'high' | 'standard';
-export type HITLStatus = 'pending' | 'approved' | 'rejected' | 'overridden';
-export type AlertSeverity = 'high' | 'medium' | 'low' | 'info';
-export type AlertTriggerType = 'surge' | 'psi_drift' | 'model_update' | 'connector_error' | 'override_rate';
+export type UserRole =
+  | "analyst"
+  | "senior_analyst"
+  | "supervisor"
+  | "super_admin";
+export type PostPlatform = "twitter" | "facebook" | "youtube" | "bluesky" | "submission";
+export type PostLanguage = "en" | "pcm" | "ha" | "yo" | "ig";
+export type ClassificationLabel =
+  | "misinformation"
+  | "disinformation"
+  | "factual"
+  | "irrelevant"
+  | "pending";
+export type HITLPriority = "high" | "standard";
+export type HITLStatus = "pending" | "approved" | "rejected" | "overridden";
+export type AlertSeverity = "high" | "medium" | "low" | "info";
+export type AlertTriggerType =
+  | "surge"
+  | "psi_drift"
+  | "model_update"
+  | "connector_error"
+  | "override_rate";
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -82,8 +102,9 @@ export interface Alert {
 
 export interface LanguageMetrics {
   macroF1: number;
+  recall: number; // added — now returned by ML service
   psi: number;
-  sampleCount: number;
+  sampleCount?: number; // optional — not returned by ML service v1.0.0
 }
 
 export interface ModelMetrics {
@@ -95,9 +116,10 @@ export interface ModelMetrics {
   inferenceP95ms: number;
   perLanguage: Partial<Record<PostLanguage, LanguageMetrics>>;
   feedbackQueue: number;
-  lastRetrain: string;
+  lastRetrain?: string;
+  computedAt?: string; // when the ML service computed these metrics
+  stale?: boolean; // true when served from MongoDB cache (ML service unreachable)
   createdAt: string;
-  stale?: boolean;
 }
 
 export interface RetrainingHistory {
@@ -107,7 +129,7 @@ export interface RetrainingHistory {
   modelVersionAfter?: string;
   f1Before: number;
   f1After?: number;
-  status: 'promoted' | 'rejected' | 'archived' | 'in_progress';
+  status: "promoted" | "rejected" | "archived" | "in_progress";
   triggeredBy: string;
   startedAt: string;
   completedAt?: string;
@@ -122,7 +144,7 @@ export interface KBDocument {
   language: PostLanguage;
   cloudinaryUrl?: string;
   embedded: boolean;
-  status?: 'ready' | 'processing' | 'failed';
+  status?: "ready" | "processing" | "failed";
   chunkCount?: number;
   tags: string[];
   createdAt: string;
@@ -229,17 +251,80 @@ export interface HITLTeamStats {
   topReviewers: Array<{ name: string; count: number }>;
 }
 
+// ── Live feed ─────────────────────────────────────────────────────────────────
+
+export interface RecentPost {
+  post_id:         string;
+  content_snippet: string;
+  label:           ClassificationLabel;
+  confidence:      number;
+  entropy:         number;
+  language:        PostLanguage | null;
+  state:           string | null;
+  platform:        PostPlatform;
+  classified_at:   string;
+}
+
+export interface RecentFeedResponse {
+  posts:             RecentPost[];
+  count:             number;
+  total_since_start: number;
+}
+
 // ── Pipeline ──────────────────────────────────────────────────────────────────
 
 export interface PipelineStatus {
-  status: 'healthy' | 'degraded' | 'fallback' | 'retraining';
+  // Added 'mock' — returned when ML_MOCK_MODE=true so the frontend can show a banner
+  status: "healthy" | "degraded" | "fallback" | "retraining" | "mock";
   retrainingStartedAt?: string;
+  mockMode?: boolean;
   mlService: {
     url: string;
-    circuitState: 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+    circuitState: "CLOSED" | "OPEN" | "HALF_OPEN";
     healthy: boolean;
     modelVersion: string;
     lastHealthError: string | null;
     lastChecked: string;
   };
 }
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+
+export interface SystemInfo {
+  region: string;
+  organisation: string;
+  backendVersion: string;
+  frontendVersion: string;
+  mlServiceUrl: string;
+  mlServiceStatus: "ok" | "unavailable" | "degraded";
+  mlModelVersion: string;
+  mockMode: boolean;
+  kafkaEnabled: boolean;
+}
+
+export interface AppSettings {
+  // ── Alert thresholds ──────────────────────────────────────────────────────
+  surgePosts:            number;   // posts on one claim in 2 h before surge alert
+  hitlAutoEscalateAbove: number;   // confidence % above which HITL → high priority
+  psiDriftAlert:         number;   // PSI threshold for drift alert
+  overrideRateAlert:     number;   // analyst override % that triggers alert
+ 
+  // ── Model performance targets ─────────────────────────────────────────────
+  macroF1Target:    number;        // minimum acceptable macro-F1 before retrain alert
+  inferenceP95Ms:   number;        // maximum acceptable p95 latency (ms)
+  feedbackQueueMax: number;        // trigger retrain when feedback queue exceeds this
+ 
+  // ── Notifications ─────────────────────────────────────────────────────────
+  notifEmail: string;
+ 
+  // ── Read-only (never sent in PATCH requests — see AppSettingsPatch) ───────
+  readonly systemInfo: SystemInfo;
+  readonly updatedAt?: string;
+}
+ 
+/**
+ * The subset of AppSettings that may be sent in a PATCH /settings request.
+ * Strips the read-only server-side fields so the compiler prevents accidentally
+ * sending systemInfo or updatedAt to the backend.
+ */
+export type AppSettingsPatch = Partial<Omit<AppSettings, 'systemInfo' | 'updatedAt'>>;

@@ -1,4 +1,4 @@
-﻿import { useState, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Upload, Trash2, RefreshCw, Search } from 'lucide-react';
 import { kbApi } from '../api/kb';
@@ -6,24 +6,27 @@ import { FullPageSpinner } from '../components/Spinner';
 import { EmptyState } from '../components/EmptyState';
 import { Modal } from '../components/Modal';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { useToast } from '../context/ToastContext';
 import { formatDateTime, LANG_FLAGS } from '../lib/utils';
 import type { KBDocument, PostLanguage } from '../types/api';
 
 const PAGE_SIZE = 20;
 
 function UploadModal({ onClose }: { onClose: () => void }) {
-  const qc = useQueryClient();
+  const qc    = useQueryClient();
+  const toast = useToast().toast;
   const fileRef = useRef<HTMLInputElement>(null);
-  const [title, setTitle] = useState('');
-  const [source, setSource] = useState('');
-  const [language, setLanguage] = useState<PostLanguage>('en');
-  const [file, setFile] = useState<File | null>(null);
+  const [title,     setTitle]     = useState('');
+  const [source,    setSource]    = useState('');
+  const [language,  setLanguage]  = useState<PostLanguage>('en');
+  const [file,      setFile]      = useState<File | null>(null);
   const [immediate, setImmediate] = useState(false);
 
   const { mutate, isPending, isError } = useMutation({
     mutationFn: () => kbApi.upload(file!, { title, source, language, immediate }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['kb'] });
+      toast.success('Document uploaded', immediate ? 'Indexing started immediately.' : 'Document queued for indexing.');
       onClose();
     },
   });
@@ -83,7 +86,7 @@ function UploadModal({ onClose }: { onClose: () => void }) {
       </label>
 
       {isError && (
-        <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">Upload failed. Please try again.</p>
+        <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">Upload failed. Please check the file and try again.</p>
       )}
 
       <div className="flex justify-end gap-2 pt-2">
@@ -103,12 +106,12 @@ function UploadModal({ onClose }: { onClose: () => void }) {
 }
 
 export default function KnowledgeBase() {
-  const qc = useQueryClient();
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
+  const qc    = useQueryClient();
+  const toast = useToast().toast;
+  const [page,        setPage]        = useState(1);
+  const [search,      setSearch]      = useState('');
   const [searchInput, setSearchInput] = useState('');
-  const [uploadOpen, setUploadOpen] = useState(false);
-  const [actionError, setActionError] = useState('');
+  const [uploadOpen,  setUploadOpen]  = useState(false);
 
   const { data, isLoading, isFetching, isError } = useQuery({
     queryKey: ['kb', { page, search }],
@@ -118,24 +121,30 @@ export default function KnowledgeBase() {
 
   const { mutate: deleteDoc } = useMutation({
     mutationFn: (id: string) => kbApi.delete(id),
-    onSuccess: () => { setActionError(''); void qc.invalidateQueries({ queryKey: ['kb'] }); },
-    onError: () => setActionError('Failed to delete document.'),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['kb'] });
+      toast.success('Document deleted');
+    },
+    onError: () => toast.error('Delete failed', 'Could not remove the document. Please try again.'),
   });
 
   const { mutate: reindex, isPending: reindexing } = useMutation({
     mutationFn: () => kbApi.reindex(),
-    onSuccess: () => { setActionError(''); void qc.invalidateQueries({ queryKey: ['kb'] }); },
-    onError: () => setActionError('Reindex failed. Please try again.'),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['kb'] });
+      toast.success('Reindex complete', 'All documents have been re-indexed.');
+    },
+    onError: () => toast.error('Reindex failed', 'Please try again in a moment.'),
   });
 
   const docs: KBDocument[] = data?.data ?? [];
-  const total = data?.total ?? 0;
+  const total      = data?.total ?? 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-gray-900">Knowledge Base</h1>
+        <h1 className="text-base font-semibold text-gray-900">Knowledge Base</h1>
         <div className="flex gap-2">
           <button
             onClick={() => reindex()}
@@ -155,7 +164,6 @@ export default function KnowledgeBase() {
       </div>
 
       {isError && <ErrorBanner message="Failed to load documents." />}
-      {actionError && <ErrorBanner message={actionError} />}
 
       <div className="glass-card p-4">
         <form onSubmit={(e) => { e.preventDefault(); setSearch(searchInput); setPage(1); }} className="flex gap-2">
@@ -224,17 +232,16 @@ export default function KnowledgeBase() {
                           ? 'bg-blue-100 text-blue-700'
                           : 'bg-red-100 text-red-700'
                       }`}>
-                        {doc.status}
+                        {doc.status ?? 'unknown'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-400">{formatDateTime(doc.createdAt)}</td>
                     <td className="px-4 py-3">
                       <button
                         onClick={() => deleteDoc(doc._id)}
-                        className="text-gray-400 hover:text-red-600 transition-colors"
-                        title="Delete"
+                        className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </td>
                   </tr>
@@ -249,16 +256,12 @@ export default function KnowledgeBase() {
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                     disabled={page === 1 || isFetching}
                     className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-50"
-                  >
-                    Previous
-                  </button>
+                  >Previous</button>
                   <button
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                     disabled={page === totalPages || isFetching}
                     className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-50"
-                  >
-                    Next
-                  </button>
+                  >Next</button>
                 </div>
               </div>
             )}
