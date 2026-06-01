@@ -61,8 +61,31 @@ export const PLATFORM_LABELS: Record<PostPlatform, string> = {
 };
 
 export const ROLE_LABELS: Record<UserRole, string> = {
-  analyst: 'Analyst', senior_analyst: 'Senior Analyst',
-  supervisor: 'Supervisor', super_admin: 'Super Admin',
+  analyst:        'Analyst',
+  senior_analyst: 'Senior Analyst',
+  supervisor:     'Supervisor',
+  org_admin:      'Health Center Admin',
+  super_admin:    'Platform Super Admin',
+};
+
+export const ROLE_COLORS: Record<UserRole, string> = {
+  analyst:        'bg-gray-100 text-gray-600',
+  senior_analyst: 'bg-blue-100 text-blue-700',
+  supervisor:     'bg-indigo-100 text-indigo-700',
+  org_admin:      'bg-emerald-100 text-emerald-700',
+  super_admin:    'bg-purple-100 text-purple-700',
+};
+
+export const ORG_STATUS_META: Record<string, { label: string; color: string }> = {
+  active:    { label: 'Active',    color: 'bg-emerald-100 text-emerald-700' },
+  suspended: { label: 'Suspended', color: 'bg-red-100 text-red-600' },
+  trial:     { label: 'Trial',     color: 'bg-amber-100 text-amber-700' },
+};
+
+export const ORG_PLAN_META: Record<string, { label: string; color: string }> = {
+  basic:    { label: 'Basic',    color: 'bg-gray-100 text-gray-600' },
+  standard: { label: 'Standard', color: 'bg-blue-100 text-blue-600' },
+  premium:  { label: 'Premium',  color: 'bg-purple-100 text-purple-600' },
 };
 
 export const LANG_FLAGS: Record<PostLanguage, string> = {

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, X, Edit3, Copy, CheckCheck, Loader2 } from 'lucide-react';
+import { Check, X, Edit3, Copy, CheckCheck, Loader2, Send, SkipForward } from 'lucide-react';
 import { hitlApi } from '../api/hitl';
 import { api } from '../api/client';
 import { LabelBadge, PriorityBadge, StatusBadge } from '../components/Badge';
@@ -10,6 +10,7 @@ import { Modal } from '../components/Modal';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
+import { dispatchApi } from '../api/dispatch';
 import { formatRelative, LANG_LABELS, PLATFORM_LABELS, LABEL_META } from '../lib/utils';
 import type { HITLReview, ClassificationLabel, HITLPriority, PostLanguage, PostPlatform } from '../types/api';
 
@@ -105,65 +106,145 @@ function OverrideModal({ review, onClose }: { review: HITLReview; onClose: () =>
   );
 }
 
-// ── Dispatch copy modal (shown after approve) ─────────────────────────────────
+// ── Dispatch modal (shown after approve) ──────────────────────────────────────
+// Fetches ML-generated counter-narrative if available; always editable before
+// deploying. Analyst can Deploy (sends to platform via ML), Skip (signals ML
+// to skip this post), or just Copy and close to post manually.
 
 function DispatchModal({ review, onClose }: { review: HITLReview; onClose: () => void }) {
-  const [copied, setCopied] = useState(false);
-  const cls      = review.classificationId as { suggestedResponse?: string; approvedResponse?: string } | null;
-  const post     = review.postId as { platform?: PostPlatform } | null;
-  const response = review.approvedResponse ?? cls?.suggestedResponse ?? cls?.approvedResponse ?? '';
+  const toast = useToast().toast;
+  const post  = review.postId as { _id?: string; platform?: PostPlatform } | null;
+  const postId = post?._id ?? (typeof review.postId === 'string' ? review.postId : '');
   const platformLabel = post?.platform ? (PLATFORM_LABELS[post.platform] ?? post.platform) : 'platform';
+
+  // Seed with any existing approved response, then fetch from ML
+  const [text,    setText]    = useState(review.approvedResponse ?? '');
+  const [copied,  setCopied]  = useState(false);
+  const [fetched, setFetched] = useState(false);
+  const [mlAvailable, setMlAvailable] = useState(false);
+  const [deployed, setDeployed] = useState(false);
+
+  // Fetch ML counter-narrative on mount
+  useQuery({
+    queryKey: ['counter-narrative', postId],
+    queryFn:  () => dispatchApi.getCounterNarrative(postId),
+    enabled:  !!postId && !fetched,
+    staleTime: Infinity,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onSuccess: (data: any) => {
+      setFetched(true);
+      if (data.available && data.counterNarrative) {
+        setText(data.counterNarrative);
+        setMlAvailable(true);
+      }
+    },
+  } as Parameters<typeof useQuery>[0]);
+
+  const { mutate: deploy, isPending: deploying } = useMutation({
+    mutationFn: () => dispatchApi.deployCounterNarrative(postId, text),
+    onSuccess: () => {
+      toast.success('Counter-narrative deployed', `Posted to ${platformLabel} successfully.`);
+      setDeployed(true);
+    },
+    onError: () => toast.error('Deploy failed', 'Could not deploy the counter-narrative. You can copy and post it manually.'),
+  });
+
+  const { mutate: skip, isPending: skipping } = useMutation({
+    mutationFn: () => dispatchApi.skipCounterNarrative(postId),
+    onSuccess: () => {
+      toast.info('Skipped', 'Counter-narrative skipped for this post.');
+      onClose();
+    },
+    onError: () => toast.error('Skip failed', 'Could not signal skip to the ML service.'),
+  });
 
   async function copyToClipboard() {
     try {
-      await navigator.clipboard.writeText(response);
+      await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     } catch { /* browser may block */ }
   }
 
+  if (deployed) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+          <CheckCheck className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+          <p className="text-sm text-emerald-700">
+            Counter-narrative deployed to <strong>{platformLabel}</strong>. The ML service has tagged the original poster.
+          </p>
+        </div>
+        <div className="flex justify-end">
+          <button onClick={onClose} className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">Done</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      <p className="text-xs text-gray-500">
-        Review approved. Post the counter-narrative below manually on <strong>{platformLabel}</strong>.
-      </p>
-      {response ? (
-        <>
-          <textarea
-            readOnly
-            value={response}
-            rows={5}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-800 resize-none focus:outline-none"
-          />
-          <div className="flex justify-end gap-2">
-            <button
-              onClick={() => { void copyToClipboard(); }}
-              className={`flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium transition-colors ${
-                copied
-                  ? 'bg-emerald-600 text-white'
-                  : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              {copied ? <CheckCheck className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              {copied ? 'Copied!' : 'Copy response'}
-            </button>
-            <button onClick={onClose} className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
-              Done
-            </button>
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="text-sm text-gray-500 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
-            No suggested response generated. Draft your own response before posting.
-          </div>
-          <div className="flex justify-end">
-            <button onClick={onClose} className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
-              Done
-            </button>
-          </div>
-        </>
-      )}
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs text-gray-500 flex-1">
+          Review approved. Edit the counter-narrative below, then <strong>Deploy</strong> to post it
+          automatically on <strong>{platformLabel}</strong>, or <strong>Skip</strong> to mark it as reviewed without replying.
+        </p>
+        {mlAvailable && (
+          <span className="flex-shrink-0 text-[10px] font-medium px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-200">
+            ML generated
+          </span>
+        )}
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-1.5">
+          Counter-narrative response
+          <span className="text-gray-400 font-normal ml-1">(editable)</span>
+        </label>
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={6}
+          placeholder="The ML service will populate this automatically when live. You can also draft your own counter-narrative here…"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-800 resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        />
+        <p className="text-[11px] text-gray-400 mt-1">{text.length} characters</p>
+      </div>
+
+      <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
+        {/* Left: Skip */}
+        <button
+          onClick={() => skip()}
+          disabled={skipping || deploying}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 text-gray-500 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+        >
+          {skipping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <SkipForward className="h-3.5 w-3.5" />}
+          Skip
+        </button>
+
+        {/* Right: Copy + Deploy */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => { void copyToClipboard(); }}
+            disabled={!text.trim()}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium transition-colors disabled:opacity-40 ${
+              copied ? 'bg-gray-800 text-white' : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            {copied ? <CheckCheck className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+            {copied ? 'Copied!' : 'Copy'}
+          </button>
+
+          <button
+            onClick={() => deploy()}
+            disabled={!text.trim() || deploying || skipping}
+            className="flex items-center gap-1.5 px-4 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-60 font-medium"
+          >
+            {deploying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+            Deploy to {platformLabel}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

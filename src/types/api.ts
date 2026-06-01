@@ -10,6 +10,7 @@ export type UserRole =
   | "analyst"
   | "senior_analyst"
   | "supervisor"
+  | "org_admin"
   | "super_admin";
 export type PostPlatform = "twitter" | "facebook" | "youtube" | "bluesky" | "submission";
 export type PostLanguage = "en" | "pcm" | "ha" | "yo" | "ig";
@@ -32,10 +33,62 @@ export type AlertTriggerType =
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 export interface AuthUser {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
+  id:             string;
+  name:           string;
+  email:          string;
+  role:           UserRole;
+  organizationId: string | null;
+  organization?:  { id: string; name: string; slug: string } | null;
+}
+
+// ── Organization ──────────────────────────────────────────────────────────────
+
+export type OrgPlan   = 'basic' | 'standard' | 'premium';
+export type OrgStatus = 'active' | 'suspended' | 'trial';
+
+export interface Organization {
+  _id:          string;
+  name:         string;
+  slug:         string;
+  description?: string;
+  region:       string;
+  state:        string;
+  contactEmail: string;
+  phoneNumber?: string;
+  logoUrl?:     string;
+  plan:         OrgPlan;
+  status:       OrgStatus;
+  userCount:    number;
+  createdBy:    string | { name: string; email: string };
+  createdAt:    string;
+  updatedAt:    string;
+}
+
+export interface OrgStats {
+  postsToday:  number;
+  postsTotal:  number;
+  hitlPending: number;
+  hitlTotal:   number;
+  openAlerts:  number;
+}
+
+export interface OrgDetail extends Organization {
+  users: User[];
+  stats: OrgStats;
+}
+
+export interface PlatformOverview {
+  summary: {
+    totalOrgs:   number;
+    activeOrgs:  number;
+    totalUsers:  number;
+    postsToday:  number;
+    postsTotal:  number;
+    hitlPending: number;
+    openAlerts:  number;
+  };
+  recentOrgs:    Organization[];
+  organizations: (Organization & { postsToday: number; hitlPending: number })[];
 }
 
 export interface LoginResponse {
@@ -159,13 +212,14 @@ export interface KBDocument {
 // ── Users ─────────────────────────────────────────────────────────────────────
 
 export interface User {
-  _id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-  isActive: boolean;
-  lastActive?: string;
-  createdAt: string;
+  _id:            string;
+  name:           string;
+  email:          string;
+  role:           UserRole;
+  organizationId?: string;
+  isActive:       boolean;
+  lastActive?:    string;
+  createdAt:      string;
 }
 
 // ── Audit Log ─────────────────────────────────────────────────────────────────

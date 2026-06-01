@@ -2,20 +2,22 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import { Layout } from './components/Layout';
 import { FullPageSpinner } from './components/Spinner';
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Posts from './pages/Posts';
-import HITLQueue from './pages/HITLQueue';
-import Alerts from './pages/Alerts';
-import ModelHealth from './pages/ModelHealth';
-import KnowledgeBase from './pages/KnowledgeBase';
-import Users from './pages/Users';
-import AuditLog from './pages/AuditLog';
-import TrendAnalysis from './pages/TrendAnalysis';
+import Login           from './pages/Login';
+import Dashboard       from './pages/Dashboard';
+import Posts           from './pages/Posts';
+import HITLQueue       from './pages/HITLQueue';
+import Alerts          from './pages/Alerts';
+import ModelHealth     from './pages/ModelHealth';
+import KnowledgeBase   from './pages/KnowledgeBase';
+import Users           from './pages/Users';
+import AuditLog        from './pages/AuditLog';
+import TrendAnalysis   from './pages/TrendAnalysis';
 import ResponseDispatch from './pages/ResponseDispatch';
 import IngestionPipeline from './pages/IngestionPipeline';
-import Settings from './pages/Settings';
-import Submit from './pages/Submit';
+import Settings        from './pages/Settings';
+import Submit          from './pages/Submit';
+import PlatformOverview   from './pages/PlatformOverview';
+import OrganizationDetail from './pages/OrganizationDetail';
 import type { UserRole } from './types/api';
 
 function RequireAuth({ children, roles }: { children: React.ReactNode; roles?: UserRole[] }) {
@@ -39,14 +41,31 @@ export default function App() {
         }
       >
         <Route index element={<Navigate to="/dashboard" replace />} />
+
+        {/* ── Platform super_admin routes ──────────────────────────────────── */}
+        <Route
+          path="organizations"
+          element={<RequireAuth roles={['super_admin']}><PlatformOverview /></RequireAuth>}
+        />
+        <Route
+          path="organizations/:id"
+          element={<RequireAuth roles={['super_admin']}><OrganizationDetail /></RequireAuth>}
+        />
+        <Route
+          path="platform/overview"
+          element={<RequireAuth roles={['super_admin']}><PlatformOverview /></RequireAuth>}
+        />
+
+        {/* ── Org-level routes ─────────────────────────────────────────────── */}
         <Route path="dashboard"      element={<Dashboard />} />
         <Route path="posts"          element={<Posts />} />
         <Route path="hitl"           element={<HITLQueue />} />
         <Route path="knowledge-base" element={<KnowledgeBase />} />
+
         <Route
           path="dispatch"
           element={
-            <RequireAuth roles={['senior_analyst', 'supervisor', 'super_admin']}>
+            <RequireAuth roles={['senior_analyst', 'supervisor', 'org_admin', 'super_admin']}>
               <ResponseDispatch />
             </RequireAuth>
           }
@@ -54,7 +73,7 @@ export default function App() {
         <Route
           path="trends"
           element={
-            <RequireAuth roles={['senior_analyst', 'supervisor', 'super_admin']}>
+            <RequireAuth roles={['senior_analyst', 'supervisor', 'org_admin', 'super_admin']}>
               <TrendAnalysis />
             </RequireAuth>
           }
@@ -62,7 +81,7 @@ export default function App() {
         <Route
           path="alerts"
           element={
-            <RequireAuth roles={['supervisor', 'super_admin']}>
+            <RequireAuth roles={['supervisor', 'org_admin', 'super_admin']}>
               <Alerts />
             </RequireAuth>
           }
@@ -70,7 +89,7 @@ export default function App() {
         <Route
           path="model-health"
           element={
-            <RequireAuth roles={['supervisor', 'super_admin']}>
+            <RequireAuth roles={['supervisor', 'org_admin', 'super_admin']}>
               <ModelHealth />
             </RequireAuth>
           }
@@ -78,7 +97,7 @@ export default function App() {
         <Route
           path="users"
           element={
-            <RequireAuth roles={['supervisor', 'super_admin']}>
+            <RequireAuth roles={['supervisor', 'org_admin', 'super_admin']}>
               <Users />
             </RequireAuth>
           }
@@ -86,7 +105,7 @@ export default function App() {
         <Route
           path="audit-log"
           element={
-            <RequireAuth roles={['supervisor', 'super_admin']}>
+            <RequireAuth roles={['supervisor', 'org_admin', 'super_admin']}>
               <AuditLog />
             </RequireAuth>
           }
@@ -94,7 +113,7 @@ export default function App() {
         <Route
           path="ingestion"
           element={
-            <RequireAuth roles={['super_admin']}>
+            <RequireAuth roles={['org_admin', 'super_admin']}>
               <IngestionPipeline />
             </RequireAuth>
           }
@@ -102,7 +121,7 @@ export default function App() {
         <Route
           path="settings"
           element={
-            <RequireAuth roles={['super_admin']}>
+            <RequireAuth roles={['org_admin', 'super_admin']}>
               <Settings />
             </RequireAuth>
           }

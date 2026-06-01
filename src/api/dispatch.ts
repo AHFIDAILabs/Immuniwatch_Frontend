@@ -17,10 +17,26 @@ export interface DispatchRecord {
   dispatchedAt: string;
 }
 
+export interface CounterNarrativeResult {
+  available:        boolean;
+  postId:           string | null;
+  counterNarrative: string | null;
+  platform:         string | null;
+}
+
 export const dispatchApi = {
   getStats: () =>
     api.get<DispatchStats>('/dispatch/stats').then((r) => r.data),
 
   list: (params?: { page?: number; limit?: number }) =>
     api.get<{ data: DispatchRecord[]; total: number }>('/dispatch', { params }).then((r) => r.data),
+
+  getCounterNarrative: (postId: string) =>
+    api.get<CounterNarrativeResult>('/dispatch/counter-narrative', { params: { postId } }).then((r) => r.data),
+
+  deployCounterNarrative: (postId: string, approvedText: string) =>
+    api.post<{ success: boolean; message: string }>(`/dispatch/counter-narrative/${postId}/deploy`, { approvedText }).then((r) => r.data),
+
+  skipCounterNarrative: (postId: string) =>
+    api.post<{ success: boolean; message: string }>(`/dispatch/counter-narrative/${postId}/skip`).then((r) => r.data),
 };

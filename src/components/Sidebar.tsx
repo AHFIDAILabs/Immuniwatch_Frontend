@@ -4,9 +4,11 @@ import {
   LayoutDashboard, ClipboardCheck, Radio, Send,
   TrendingUp, BookOpen, Network, Activity,
   ScrollText, Users, Settings, ShieldCheck, LogOut, Bell,
+  Building2, Globe,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { hitlApi } from '../api/hitl';
+import { ROLE_LABELS } from '../lib/utils';
 import type { UserRole } from '../types/api';
 
 interface NavItem {
@@ -17,18 +19,38 @@ interface NavItem {
   hitlBadge?: boolean;
 }
 
-// ── Navigation definition ─────────────────────────────────────────────────────
+// ── Super admin — platform management nav ─────────────────────────────────────
 
-const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
+const PLATFORM_NAV: { label: string; items: NavItem[] }[] = [
+  {
+    label: 'Platform',
+    items: [
+      { to: '/organizations',     label: 'Organizations',     Icon: Building2 },
+      { to: '/platform/overview', label: 'Platform Overview', Icon: Globe },
+    ],
+  },
+  {
+    label: 'Operations',
+    items: [
+      { to: '/users',     label: 'All Users',         Icon: Users },
+      { to: '/audit-log', label: 'Audit log',         Icon: ScrollText },
+      { to: '/settings',  label: 'Platform Settings', Icon: Settings },
+    ],
+  },
+];
+
+// ── Org users — health center nav ─────────────────────────────────────────────
+
+const ORG_NAV: { label: string; items: NavItem[] }[] = [
   {
     label: 'Monitor',
     items: [
-      { to: '/dashboard', label: 'Overview',          Icon: LayoutDashboard },
-      { to: '/hitl',      label: 'HITL Review',       Icon: ClipboardCheck, hitlBadge: true },
-      { to: '/posts',     label: 'Live post feed',    Icon: Radio },
+      { to: '/dashboard',  label: 'Overview',          Icon: LayoutDashboard },
+      { to: '/hitl',       label: 'HITL Review',       Icon: ClipboardCheck, hitlBadge: true },
+      { to: '/posts',      label: 'Live post feed',    Icon: Radio },
       {
         to: '/dispatch', label: 'Response dispatch', Icon: Send,
-        roles: ['senior_analyst', 'supervisor', 'super_admin'],
+        roles: ['senior_analyst', 'supervisor', 'org_admin'],
       },
     ],
   },
@@ -36,17 +58,17 @@ const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
     label: 'Intelligence',
     items: [
       {
-        to: '/trends', label: 'Trend analysis', Icon: TrendingUp,
-        roles: ['senior_analyst', 'supervisor', 'super_admin'],
+        to: '/trends',         label: 'Trend analysis',     Icon: TrendingUp,
+        roles: ['senior_analyst', 'supervisor', 'org_admin'],
       },
       { to: '/knowledge-base', label: 'Knowledge base',     Icon: BookOpen },
       {
-        to: '/model-health', label: 'Model health', Icon: Activity,
-        roles: ['supervisor', 'super_admin'],
+        to: '/model-health',   label: 'Model health',       Icon: Activity,
+        roles: ['supervisor', 'org_admin'],
       },
       {
-        to: '/ingestion', label: 'Ingestion pipeline', Icon: Network,
-        roles: ['super_admin'],
+        to: '/ingestion',      label: 'Ingestion pipeline', Icon: Network,
+        roles: ['org_admin'],
       },
     ],
   },
@@ -55,52 +77,41 @@ const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
     items: [
       {
         to: '/alerts',    label: 'Alerts',          Icon: Bell,
-        roles: ['supervisor', 'super_admin'],
+        roles: ['supervisor', 'org_admin'],
       },
       {
         to: '/audit-log', label: 'Audit log',       Icon: ScrollText,
-        roles: ['supervisor', 'super_admin'],
+        roles: ['supervisor', 'org_admin'],
       },
       {
         to: '/users',     label: 'User management', Icon: Users,
-        roles: ['supervisor', 'super_admin'],
+        roles: ['supervisor', 'org_admin'],
       },
       {
         to: '/settings',  label: 'Settings',        Icon: Settings,
-        roles: ['super_admin'],
+        roles: ['org_admin'],
       },
     ],
   },
 ];
 
-// ── Role display labels ───────────────────────────────────────────────────────
-
-const ROLE_LABELS: Record<UserRole, string> = {
-  analyst:        'Analyst',
-  senior_analyst: 'Senior Analyst',
-  supervisor:     'Supervisor',
-  super_admin:    'Super Admin',
-};
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function Sidebar() {
   const { user, logout } = useAuth();
+  const isSuperAdmin = user?.role === 'super_admin';
+  const navSections  = isSuperAdmin ? PLATFORM_NAV : ORG_NAV;
 
   const { data: hitlData } = useQuery({
     queryKey: ['hitl', 'pending-count'],
     queryFn:  () => hitlApi.list({ page: 1, limit: 1, status: 'pending' }),
     refetchInterval: 60_000,
     staleTime:       30_000,
+    enabled: !isSuperAdmin,
   });
   const pendingCount = hitlData?.total ?? 0;
 
-  const initials = user?.name
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase() ?? '?';
+  const initials = user?.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() ?? '?';
 
   return (
     <aside className="flex flex-col w-52 min-h-screen glass-sidebar flex-shrink-0">
@@ -109,15 +120,17 @@ export function Sidebar() {
         <div className="w-7 h-7 rounded-md bg-emerald-600 flex items-center justify-center flex-shrink-0">
           <ShieldCheck className="h-4 w-4 text-white" />
         </div>
-        <div className="leading-tight">
+        <div className="leading-tight min-w-0">
           <div className="text-xs font-semibold text-gray-900">ImmuniWatch</div>
-          <div className="text-[10px] text-gray-400">Nigeria · NPHCDA</div>
+          <div className="text-[10px] text-gray-400 truncate">
+            {isSuperAdmin ? 'Platform Admin' : (user?.organization?.name ?? 'Health Center')}
+          </div>
         </div>
       </div>
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-2 py-2">
-        {NAV_SECTIONS.map((section) => {
+        {navSections.map((section) => {
           const visible = section.items.filter(
             (item) => !item.roles || (user && item.roles.includes(user.role)),
           );
@@ -160,7 +173,9 @@ export function Sidebar() {
       {/* User footer */}
       <div className="px-3 py-3 border-t border-white/40">
         <div className="flex items-center gap-2 mb-2">
-          <div className="h-7 w-7 rounded-full bg-emerald-100 flex items-center justify-center text-[10px] font-bold text-emerald-700 flex-shrink-0">
+          <div className={`h-7 w-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+            isSuperAdmin ? 'bg-purple-100 text-purple-700' : 'bg-emerald-100 text-emerald-700'
+          }`}>
             {initials}
           </div>
           <div className="min-w-0">

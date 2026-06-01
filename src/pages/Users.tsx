@@ -15,8 +15,12 @@ function apiMsg(err: unknown, fallback: string) {
   return (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? fallback;
 }
 
-// super_admin can only exist via seeding — exclude from create/edit dropdowns
-const ASSIGNABLE_ROLES = (Object.keys(ROLE_LABELS) as UserRole[]).filter((r) => r !== 'super_admin');
+// Roles that can be created by org_admin — not org_admin itself, not super_admin
+const ORG_ASSIGNABLE = (Object.keys(ROLE_LABELS) as UserRole[])
+  .filter((r) => r !== 'super_admin' && r !== 'org_admin');
+// super_admin can assign all non-platform roles (org_admin is created via org detail page)
+const SUPER_ASSIGNABLE = (Object.keys(ROLE_LABELS) as UserRole[])
+  .filter((r) => r !== 'super_admin');
 
 // ── Role badge ────────────────────────────────────────────────────────────────
 
@@ -78,7 +82,7 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
           onChange={(e) => setRole(e.target.value as UserRole)}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
         >
-          {ASSIGNABLE_ROLES.map((r) => (
+          {ORG_ASSIGNABLE.map((r) => (
             <option key={r} value={r}>{ROLE_LABELS[r]}</option>
           ))}
         </select>
@@ -144,7 +148,7 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
           onChange={(e) => setRole(e.target.value as UserRole)}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
         >
-          {ASSIGNABLE_ROLES.map((r) => (
+          {ORG_ASSIGNABLE.map((r) => (
             <option key={r} value={r}>{ROLE_LABELS[r]}</option>
           ))}
         </select>
@@ -285,7 +289,9 @@ export default function Users() {
   const qc           = useQueryClient();
   const toast        = useToast().toast;
   const isSuperAdmin = me?.role === 'super_admin';
-  const canView      = me?.role === 'supervisor' || isSuperAdmin;
+  const isOrgAdmin   = me?.role === 'org_admin';
+  const canEdit      = isSuperAdmin || isOrgAdmin;
+  const canView      = canEdit || me?.role === 'supervisor';
 
   const [modal, setModal] = useState<ActiveModal>(null);
 
@@ -313,10 +319,10 @@ export default function Users() {
         <div>
           <h1 className="text-base font-semibold text-gray-900">User Management</h1>
           <p className="text-[11px] text-gray-400 mt-0.5">
-            {isSuperAdmin ? 'Create accounts and manage roles' : 'View team members'}
+            {canEdit ? 'Create accounts and manage roles' : 'View team members'}
           </p>
         </div>
-        {isSuperAdmin && (
+        {canEdit && (
           <button
             onClick={() => setModal({ type: 'create' })}
             className="flex items-center gap-1.5 px-3 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
@@ -372,7 +378,7 @@ export default function Users() {
                     <td className="px-4 py-3 text-xs text-gray-400">{formatDateTime(u.createdAt)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        {isSuperAdmin && !isSelf && (
+                        {canEdit && !isSelf && (
                           <>
                             {/* Edit name / role */}
                             <button
@@ -415,7 +421,7 @@ export default function Users() {
                             </button>
                           </>
                         )}
-                        {!isSuperAdmin && (
+                        {!canEdit && (
                           <span title="Read-only">
                             <Eye className="h-3.5 w-3.5 text-gray-300" />
                           </span>
