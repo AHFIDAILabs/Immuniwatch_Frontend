@@ -18,14 +18,11 @@ function apiMsg(err: unknown, fallback: string) {
 // Roles that can be created by org_admin — not org_admin itself, not super_admin
 const ORG_ASSIGNABLE = (Object.keys(ROLE_LABELS) as UserRole[])
   .filter((r) => r !== 'super_admin' && r !== 'org_admin');
-// super_admin can assign all non-platform roles (org_admin is created via org detail page)
-const SUPER_ASSIGNABLE = (Object.keys(ROLE_LABELS) as UserRole[])
-  .filter((r) => r !== 'super_admin');
-
 // ── Role badge ────────────────────────────────────────────────────────────────
 
 const ROLE_COLORS: Record<UserRole, string> = {
   super_admin:    'bg-purple-100 text-purple-700',
+  org_admin:      'bg-emerald-100 text-emerald-700',
   supervisor:     'bg-blue-100 text-blue-700',
   senior_analyst: 'bg-indigo-100 text-indigo-700',
   analyst:        'bg-gray-100 text-gray-600',

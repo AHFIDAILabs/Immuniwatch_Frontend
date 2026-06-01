@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Building2, Users, Radio, ClipboardCheck,
-  AlertTriangle, UserPlus, Pencil, ShieldCheck, KeyRound,
+  AlertTriangle, UserPlus, Pencil,
   ToggleLeft, ToggleRight,
 } from 'lucide-react';
 import { orgsApi } from '../api/organizations';
