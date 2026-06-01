@@ -47,21 +47,24 @@ export type OrgPlan   = 'basic' | 'standard' | 'premium';
 export type OrgStatus = 'active' | 'suspended' | 'trial';
 
 export interface Organization {
-  _id:          string;
-  name:         string;
-  slug:         string;
-  description?: string;
-  region:       string;
-  state:        string;
-  contactEmail: string;
-  phoneNumber?: string;
-  logoUrl?:     string;
-  plan:         OrgPlan;
-  status:       OrgStatus;
-  userCount:    number;
-  createdBy:    string | { name: string; email: string };
-  createdAt:    string;
-  updatedAt:    string;
+  _id:                  string;
+  name:                 string;
+  slug:                 string;
+  description?:         string;
+  region:               string;
+  state:                string;
+  contactEmail:         string;
+  phoneNumber?:         string;
+  logoUrl?:             string;
+  plan:                 OrgPlan;
+  status:               OrgStatus;
+  userCount:            number;
+  adminClaimed:         boolean;
+  claimLink?:           string | null;
+  claimTokenExpiresAt?: string | null;
+  createdBy:            string | { name: string; email: string };
+  createdAt:            string;
+  updatedAt:            string;
 }
 
 export interface OrgStats {

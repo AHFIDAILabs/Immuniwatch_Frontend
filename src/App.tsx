@@ -5,6 +5,7 @@ import { FullPageSpinner } from './components/Spinner';
 import Login           from './pages/Login';
 import Deactivated     from './pages/Deactivated';
 import AcceptInvite    from './pages/AcceptInvite';
+import ClaimOrg        from './pages/ClaimOrg';
 import Dashboard       from './pages/Dashboard';
 import Posts           from './pages/Posts';
 import HITLQueue       from './pages/HITLQueue';
@@ -38,6 +39,7 @@ export default function App() {
       <Route path="/submit"      element={<Submit />} />
       <Route path="/deactivated"        element={<Deactivated />} />
       <Route path="/accept-invite/:token" element={<AcceptInvite />} />
+      <Route path="/claim-org/:token"     element={<ClaimOrg />} />
       <Route
         element={
           <RequireAuth>

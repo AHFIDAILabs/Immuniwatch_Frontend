@@ -23,4 +23,10 @@ export const authApi = {
 
   acceptInvite: (token: string, password: string) =>
     api.post<{ message: string; email: string }>('/auth/accept-invite', { token, password }).then((r) => r.data),
+
+  getOrgClaim: (token: string) =>
+    api.get<{ orgName: string; orgId: string; region: string; state: string }>(`/auth/claim-org/${token}`).then((r) => r.data),
+
+  acceptOrgClaim: (body: { token: string; name: string; email: string; password: string }) =>
+    api.post<{ message: string; email: string }>('/auth/claim-org', body).then((r) => r.data),
 };

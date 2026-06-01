@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   Building2, Users, Radio, ClipboardCheck,
-  AlertTriangle, TrendingUp, Plus, ChevronRight,
+  AlertTriangle, TrendingUp, Plus, ChevronRight, Copy, CheckCheck, Link2,
 } from 'lucide-react';
 import { orgsApi } from '../api/organizations';
 import { FullPageSpinner } from '../components/Spinner';
@@ -25,14 +25,17 @@ const NIGERIAN_STATES = [
 ];
 
 function CreateOrgModal({ onClose }: { onClose: () => void }) {
-  const toast = useToast().toast;
+  const toast    = useToast().toast;
   const navigate = useNavigate();
   const [form, setForm] = useState({
     name: '', description: '', region: '', state: '',
     contactEmail: '', phoneNumber: '', plan: 'basic',
   });
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [error,      setError]      = useState('');
+  const [loading,    setLoading]    = useState(false);
+  const [claimLink,  setClaimLink]  = useState('');
+  const [orgId,      setOrgId]      = useState('');
+  const [copied,     setCopied]     = useState(false);
 
   function set(k: string, v: string) { setForm((f) => ({ ...f, [k]: v })); }
 
@@ -46,13 +49,74 @@ function CreateOrgModal({ onClose }: { onClose: () => void }) {
         contactEmail: form.contactEmail, phoneNumber: form.phoneNumber || undefined,
         plan: form.plan,
       });
-      toast.success('Organization created', `${org.name} is ready. Now create an Org Admin.`);
-      onClose();
-      navigate(`/organizations/${org._id}`);
+      toast.success('Organization created', 'Share the invite link with the org admin.');
+      // Show the claim link BEFORE navigating away
+      setClaimLink((org as unknown as { claimLink?: string }).claimLink ?? '');
+      setOrgId(org._id);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setError(msg ?? 'Failed to create organization.');
     } finally { setLoading(false); }
+  }
+
+  async function copy() {
+    await navigator.clipboard.writeText(claimLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  }
+
+  // ── Step 2: show the invite link after org creation ───────────────────────
+  if (claimLink) {
+    return (
+      <div className="space-y-4">
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+          <p className="text-xs font-semibold text-emerald-700 mb-1">Organization created successfully!</p>
+          <p className="text-xs text-emerald-600">
+            Share this invite link with the person who will manage this health center.
+            When they click it, they'll register as the <strong>Organization Admin</strong>.
+            The link expires in <strong>30 days</strong>.
+          </p>
+        </div>
+
+        <div>
+          <label className="flex items-center gap-1.5 text-xs font-medium text-gray-700 mb-1.5">
+            <Link2 className="h-3.5 w-3.5 text-emerald-600" />
+            Admin Invite Link
+          </label>
+          <div className="flex gap-2">
+            <input
+              readOnly
+              value={claimLink}
+              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs bg-gray-50 text-gray-700 min-w-0 truncate"
+            />
+            <button
+              onClick={() => { void copy(); }}
+              className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg transition-colors ${
+                copied ? 'bg-emerald-600 text-white' : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              {copied ? <CheckCheck className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+              {copied ? 'Copied!' : 'Copy Link'}
+            </button>
+          </div>
+          <p className="text-[11px] text-gray-400 mt-1.5">
+            You can also copy this link later from the organization detail page.
+          </p>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button onClick={onClose} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
+            Close
+          </button>
+          <button
+            onClick={() => { onClose(); navigate(`/organizations/${orgId}`); }}
+            className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+          >
+            View Organization
+          </button>
+        </div>
+      </div>
+    );
   }
 
   const field = (label: string, key: string, type = 'text', placeholder = '') => (
