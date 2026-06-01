@@ -29,7 +29,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then((u) => { setUser(u); setDeactivated(false); })
       .catch((err) => {
         setUser(null);
+        // Only mark as deactivated if we got that specific code — a plain 401
+        // (unauthenticated visitor on a public page) must NOT set isDeactivated.
         if (isDeactivatedError(err)) setDeactivated(true);
+        else setDeactivated(false);
       })
       .finally(() => setLoading(false));
   }, []);

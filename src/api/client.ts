@@ -55,13 +55,21 @@ api.interceptors.response.use(
     } catch (refreshErr: unknown) {
       const asError = refreshErr instanceof Error ? refreshErr : new Error(String(refreshErr));
       drainQueue(asError);
-      // Deactivated accounts get a dedicated page, not the login page
+
       const code = (refreshErr as { response?: { data?: { code?: string } } })?.response?.data?.code;
+      const path  = window.location.pathname;
+
+      // Public paths that should never be redirected to login — the page
+      // handles unauthenticated state itself (invite / claim / deactivated pages).
+      const PUBLIC_PREFIXES = ['/accept-invite', '/claim-org', '/deactivated', '/submit'];
+      const isPublic = PUBLIC_PREFIXES.some((p) => path.startsWith(p));
+
       if (code === 'ACCOUNT_DEACTIVATED') {
         window.location.href = '/deactivated';
-      } else if (window.location.pathname !== '/login') {
+      } else if (!isPublic && path !== '/login') {
         window.location.href = '/login';
       }
+      // On public paths: just reject the promise — the component handles the error itself.
       return Promise.reject(asError);
     } finally {
       isRefreshing = false;
