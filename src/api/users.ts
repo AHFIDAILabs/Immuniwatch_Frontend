@@ -6,8 +6,8 @@ export const usersApi = {
 
   get: (id: string) => api.get<User>(`/users/${id}`).then((r) => r.data),
 
-  invite: (body: { name: string; email: string; role: UserRole; password: string }) =>
-    api.post<User>('/users', body).then((r) => r.data),
+  invite: (body: { name: string; email: string; role: UserRole; organizationId?: string }) =>
+    api.post<{ user: User; inviteLink: string; expiresAt: string }>('/users', body).then((r) => r.data),
 
   update: (id: string, body: { name?: string; role?: UserRole; active?: boolean }) =>
     api.patch<User>(`/users/${id}`, body).then((r) => r.data),

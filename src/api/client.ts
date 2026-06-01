@@ -55,7 +55,11 @@ api.interceptors.response.use(
     } catch (refreshErr: unknown) {
       const asError = refreshErr instanceof Error ? refreshErr : new Error(String(refreshErr));
       drainQueue(asError);
-      if (window.location.pathname !== '/login') {
+      // Deactivated accounts get a dedicated page, not the login page
+      const code = (refreshErr as { response?: { data?: { code?: string } } })?.response?.data?.code;
+      if (code === 'ACCOUNT_DEACTIVATED') {
+        window.location.href = '/deactivated';
+      } else if (window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
       return Promise.reject(asError);

@@ -24,6 +24,6 @@ export const orgsApi = {
   setStatus: (id: string, status: 'active' | 'suspended' | 'trial') =>
     api.patch<Organization>(`/organizations/${id}/status`, { status }).then((r) => r.data),
 
-  createAdmin: (orgId: string, body: { name: string; email: string; password: string }) =>
-    api.post(`/organizations/${orgId}/admin`, body).then((r) => r.data),
+  createAdmin: (orgId: string, body: { name: string; email: string }) =>
+    api.post<{ user: unknown; inviteLink: string; expiresAt: string }>(`/organizations/${orgId}/admin`, body).then((r) => r.data),
 };

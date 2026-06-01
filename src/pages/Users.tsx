@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { UserPlus, Pencil, KeyRound, Trash2, Eye } from 'lucide-react';
+import { UserPlus, Pencil, KeyRound, Trash2, Eye, Copy, CheckCheck } from 'lucide-react';
 import { usersApi } from '../api/users';
 import { Modal } from '../components/Modal';
 import { FullPageSpinner } from '../components/Spinner';
@@ -33,26 +33,74 @@ const ROLE_COLORS: Record<UserRole, string> = {
 function CreateUserModal({ onClose }: { onClose: () => void }) {
   const qc    = useQueryClient();
   const toast = useToast().toast;
-  const [name,     setName]     = useState('');
-  const [email,    setEmail]    = useState('');
-  const [role,     setRole]     = useState<UserRole>('analyst');
-  const [password, setPassword] = useState('');
-  const [error,    setError]    = useState('');
+  const [name,   setName]   = useState('');
+  const [email,  setEmail]  = useState('');
+  const [role,   setRole]   = useState<UserRole>('analyst');
+  const [error,  setError]  = useState('');
+  const [link,   setLink]   = useState('');
+  const [copied, setCopied] = useState(false);
 
   const { mutate, isPending } = useMutation({
-    mutationFn: () => usersApi.invite({ name, email, role, password }),
-    onSuccess: () => {
+    mutationFn: () => usersApi.invite({ name, email, role }),
+    onSuccess: (data) => {
       void qc.invalidateQueries({ queryKey: ['users'] });
-      toast.success('User created', `${name} has been added as ${ROLE_LABELS[role]}.`);
-      onClose();
+      toast.success('User invited', `Invite link generated for ${name}.`);
+      setLink(data.inviteLink);
     },
     onError: (err: unknown) => {
       setError(apiMsg(err, 'Failed to create user. Email may already be in use.'));
     },
   });
 
+  async function copy() {
+    await navigator.clipboard.writeText(link);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  }
+
+  // ── Invite link shown after creation ───────────────────────────────────────
+  if (link) {
+    return (
+      <div className="space-y-4">
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+          <p className="text-xs font-semibold text-emerald-700 mb-0.5">Invite link generated</p>
+          <p className="text-xs text-emerald-600">
+            Share this link with <strong>{name}</strong>. They'll click it to set their password and access the system.
+            Link expires in <strong>72 hours</strong>.
+          </p>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1.5">Invite Link</label>
+          <div className="flex gap-2">
+            <input
+              readOnly
+              value={link}
+              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs bg-gray-50 text-gray-700 min-w-0 truncate"
+            />
+            <button
+              onClick={() => { void copy(); }}
+              className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg transition-colors ${
+                copied ? 'bg-emerald-600 text-white' : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              {copied ? <CheckCheck className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+        </div>
+        <div className="flex justify-end">
+          <button onClick={onClose} className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">Done</button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Create form ────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4">
+      <p className="text-xs text-gray-400">
+        An invite link will be generated. No password is set by you — the user creates their own.
+      </p>
       <div>
         <label className="block text-xs font-medium text-gray-700 mb-1.5">Full Name</label>
         <input
@@ -84,25 +132,15 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
           ))}
         </select>
       </div>
-      <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1.5">Initial Password</label>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Min 8 characters"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-        />
-      </div>
       {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
       <div className="flex justify-end gap-2 pt-2">
         <button onClick={onClose} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
         <button
           onClick={() => { setError(''); mutate(); }}
-          disabled={isPending || !name.trim() || !email.trim() || !password}
+          disabled={isPending || !name.trim() || !email.trim()}
           className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-60"
         >
-          {isPending ? 'Creating…' : 'Create User'}
+          {isPending ? 'Generating…' : 'Generate Invite Link'}
         </button>
       </div>
     </div>

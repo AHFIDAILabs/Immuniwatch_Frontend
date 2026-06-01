@@ -3,37 +3,59 @@ import { authApi } from '../api/auth';
 import type { AuthUser } from '../types/api';
 
 interface AuthContextValue {
-  user:      AuthUser | null;
-  isLoading: boolean;
-  login:     (email: string, password: string) => Promise<void>;
-  logout:    () => Promise<void>;
+  user:          AuthUser | null;
+  isLoading:     boolean;
+  isDeactivated: boolean;   // true when server returns ACCOUNT_DEACTIVATED
+  login:         (email: string, password: string) => Promise<void>;
+  logout:        () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+function isDeactivatedError(err: unknown): boolean {
+  return (
+    (err as { response?: { data?: { code?: string } } })?.response?.data?.code ===
+    'ACCOUNT_DEACTIVATED'
+  );
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user,      setUser]    = useState<AuthUser | null>(null);
-  const [isLoading, setLoading] = useState(true);
+  const [user,          setUser]         = useState<AuthUser | null>(null);
+  const [isLoading,     setLoading]      = useState(true);
+  const [isDeactivated, setDeactivated]  = useState(false);
 
   useEffect(() => {
     authApi.me()
-      .then(setUser)
-      .catch(() => setUser(null))
+      .then((u) => { setUser(u); setDeactivated(false); })
+      .catch((err) => {
+        setUser(null);
+        if (isDeactivatedError(err)) setDeactivated(true);
+      })
       .finally(() => setLoading(false));
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const { user: authUser } = await authApi.login(email, password);
-    setUser(authUser);
+    try {
+      const { user: authUser } = await authApi.login(email, password);
+      setUser(authUser);
+      setDeactivated(false);
+    } catch (err) {
+      if (isDeactivatedError(err)) {
+        setDeactivated(true);
+        setUser(null);
+      }
+      throw err;
+    }
   }, []);
 
   const logout = useCallback(async () => {
     try { await authApi.logout(); } catch { /* ignore */ }
     setUser(null);
+    setDeactivated(false);
   }, []);
 
   return (
-    <AuthContext value={{ user, isLoading, login, logout }}>
+    <AuthContext value={{ user, isLoading, isDeactivated, login, logout }}>
       {children}
     </AuthContext>
   );
@@ -45,8 +67,6 @@ export function useAuth() {
   if (!ctx) throw new Error('useAuth must be used inside AuthProvider');
   return ctx;
 }
-
-// ── Convenience helpers ───────────────────────────────────────────────────────
 
 export function useIsSuperAdmin() { return useAuth().user?.role === 'super_admin'; }
 export function useIsOrgAdmin()   { return useAuth().user?.role === 'org_admin'; }

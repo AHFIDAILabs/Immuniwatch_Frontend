@@ -3,6 +3,8 @@ import { useAuth } from './context/AuthContext';
 import { Layout } from './components/Layout';
 import { FullPageSpinner } from './components/Spinner';
 import Login           from './pages/Login';
+import Deactivated     from './pages/Deactivated';
+import AcceptInvite    from './pages/AcceptInvite';
 import Dashboard       from './pages/Dashboard';
 import Posts           from './pages/Posts';
 import HITLQueue       from './pages/HITLQueue';
@@ -21,9 +23,10 @@ import OrganizationDetail from './pages/OrganizationDetail';
 import type { UserRole } from './types/api';
 
 function RequireAuth({ children, roles }: { children: React.ReactNode; roles?: UserRole[] }) {
-  const { user, isLoading } = useAuth();
-  if (isLoading) return <FullPageSpinner />;
-  if (!user) return <Navigate to="/login" replace />;
+  const { user, isLoading, isDeactivated } = useAuth();
+  if (isLoading)     return <FullPageSpinner />;
+  if (isDeactivated) return <Navigate to="/deactivated" replace />;
+  if (!user)         return <Navigate to="/login" replace />;
   if (roles && !roles.includes(user.role)) return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 }
@@ -31,8 +34,10 @@ function RequireAuth({ children, roles }: { children: React.ReactNode; roles?: U
 export default function App() {
   return (
     <Routes>
-      <Route path="/login"  element={<Login />} />
-      <Route path="/submit" element={<Submit />} />
+      <Route path="/login"       element={<Login />} />
+      <Route path="/submit"      element={<Submit />} />
+      <Route path="/deactivated"        element={<Deactivated />} />
+      <Route path="/accept-invite/:token" element={<AcceptInvite />} />
       <Route
         element={
           <RequireAuth>

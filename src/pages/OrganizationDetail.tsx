@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Building2, Users, Radio, ClipboardCheck,
-  AlertTriangle, UserPlus, Pencil,
+  AlertTriangle, UserPlus, Pencil, Copy, CheckCheck,
   ToggleLeft, ToggleRight,
 } from 'lucide-react';
 import { orgsApi } from '../api/organizations';
@@ -18,19 +18,20 @@ import type { User } from '../types/api';
 // ── Create org admin modal ────────────────────────────────────────────────────
 
 function CreateAdminModal({ orgId, orgName, onClose }: { orgId: string; orgName: string; onClose: () => void }) {
-  const qc    = useQueryClient();
-  const toast = useToast().toast;
-  const [name,     setName]     = useState('');
-  const [email,    setEmail]    = useState('');
-  const [password, setPassword] = useState('');
-  const [error,    setError]    = useState('');
+  const qc      = useQueryClient();
+  const toast   = useToast().toast;
+  const [name,   setName]   = useState('');
+  const [email,  setEmail]  = useState('');
+  const [error,  setError]  = useState('');
+  const [link,   setLink]   = useState('');
+  const [copied, setCopied] = useState(false);
 
   const { mutate, isPending } = useMutation({
-    mutationFn: () => orgsApi.createAdmin(orgId, { name, email, password }),
-    onSuccess: () => {
+    mutationFn: () => orgsApi.createAdmin(orgId, { name, email }),
+    onSuccess: (data) => {
       void qc.invalidateQueries({ queryKey: ['org', orgId] });
-      toast.success('Org Admin created', `${name} can now log in and manage ${orgName}.`);
-      onClose();
+      toast.success('Org Admin created', 'Share the invite link below with them.');
+      setLink(data.inviteLink);
     },
     onError: (err: unknown) => {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -38,22 +39,71 @@ function CreateAdminModal({ orgId, orgName, onClose }: { orgId: string; orgName:
     },
   });
 
+  async function copy() {
+    await navigator.clipboard.writeText(link);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  }
+
+  // ── Success state — show invite link ──────────────────────────────────────
+  if (link) {
+    return (
+      <div className="space-y-4">
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+          <p className="text-xs font-semibold text-emerald-700 mb-1">Admin account created for {orgName}</p>
+          <p className="text-xs text-emerald-600">
+            Share the invite link below with <strong>{name}</strong> ({email}).
+            The link expires in <strong>72 hours</strong> and can only be used once.
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1.5">Invite Link</label>
+          <div className="flex gap-2">
+            <input
+              readOnly
+              value={link}
+              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs bg-gray-50 text-gray-700 min-w-0 truncate"
+            />
+            <button
+              onClick={() => { void copy(); }}
+              className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg transition-colors ${
+                copied ? 'bg-emerald-600 text-white' : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              {copied ? <CheckCheck className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+          <p className="text-[11px] text-gray-400 mt-1.5">
+            When they click this link, they'll be asked to set their own password.
+          </p>
+        </div>
+
+        <div className="flex justify-end">
+          <button onClick={onClose} className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
+            Done
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Create form ────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4">
       <p className="text-xs text-gray-500">
-        This admin can log in to <strong>{orgName}</strong> and create analysts, senior analysts, and supervisors.
+        An invite link will be generated. Share it with the admin — they'll set their own password when they click it.
       </p>
       {[
-        { label: 'Full Name',  type: 'text',     val: name,     set: setName },
-        { label: 'Email',      type: 'email',    val: email,    set: setEmail },
-        { label: 'Password',   type: 'password', val: password, set: setPassword, hint: 'Min 8 characters' },
-      ].map(({ label, type, val, set, hint }) => (
+        { label: 'Full Name', type: 'text',  val: name,  set: setName  },
+        { label: 'Email',     type: 'email', val: email, set: setEmail },
+      ].map(({ label, type, val, set }) => (
         <div key={label}>
           <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
           <input
             type={type} value={val}
             onChange={(e) => set(e.target.value)}
-            placeholder={hint}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
           />
         </div>
@@ -63,10 +113,10 @@ function CreateAdminModal({ orgId, orgName, onClose }: { orgId: string; orgName:
         <button onClick={onClose} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
         <button
           onClick={() => { setError(''); mutate(); }}
-          disabled={isPending || !name || !email || password.length < 8}
+          disabled={isPending || !name.trim() || !email.trim()}
           className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-60"
         >
-          {isPending ? 'Creating…' : 'Create Admin'}
+          {isPending ? 'Creating…' : 'Generate Invite Link'}
         </button>
       </div>
     </div>
