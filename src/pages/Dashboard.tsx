@@ -477,9 +477,9 @@ function SuperAdminView() {
               <Tooltip
                 contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #f0f0f0' }}
                 formatter={(v: unknown, name: unknown) => [
-                  typeof v === 'number' ? v.toLocaleString() : v,
+                  typeof v === 'number' ? v.toLocaleString() : String(v),
                   String(name).charAt(0).toUpperCase() + String(name).slice(1),
-                ]}
+                ] as [string, string]}
               />
               <Legend iconSize={8} iconType="square" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
               <Bar dataKey="misinformation" stackId="a" fill="#E24B4A" name="Misinformation" />

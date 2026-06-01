@@ -124,7 +124,7 @@ export default function TrendAnalysis() {
               />
               <Tooltip
                 contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #f0f0f0' }}
-                formatter={(v: unknown) => [typeof v === 'number' ? v.toLocaleString() : v, 'Flagged posts']}
+                formatter={(v: unknown) => [typeof v === 'number' ? v.toLocaleString() : String(v), 'Flagged posts'] as [string, string]}
                 labelFormatter={(day: number) => {
                   const entry = daily[day - 1];
                   if (!entry) return `Day ${day}`;
@@ -167,7 +167,7 @@ export default function TrendAnalysis() {
                 <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} width={28} unit="%" />
                 <Tooltip
                   contentStyle={{ fontSize: 11, borderRadius: 8 }}
-                  formatter={(v: unknown) => [typeof v === 'number' ? `${v}%` : '', 'Share']}
+                  formatter={(v: unknown) => [typeof v === 'number' ? `${v}%` : '', 'Share'] as [string, string]}
                 />
                 <Bar dataKey="pct" radius={[4, 4, 0, 0]}>
                   {langRows.map((row) => (
