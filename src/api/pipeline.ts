@@ -12,7 +12,7 @@ import type { RecentFeedResponse } from '../types/api';
 export interface Connector {
   name:         string;
   platform:     string;
-  status:       'active' | 'degraded' | 'down' | 'not_integrated';
+  status:       'active' | 'degraded' | 'waiting' | 'down' | 'not_integrated';
   eventsPerMin: number;
   lastEventAt:  string;
   errorRate:    number;

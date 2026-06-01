@@ -63,7 +63,13 @@ export interface Post {
   authorHandle?: string;
   ingestedAt: string;
   createdAt: string;
+  archivedAt?: string;
   classification?: Classification | null;
+  hitlReview?: {
+    _id: string;
+    status: HITLStatus;
+    priority: HITLPriority;
+  } | null;
 }
 
 // ── HITL ──────────────────────────────────────────────────────────────────────

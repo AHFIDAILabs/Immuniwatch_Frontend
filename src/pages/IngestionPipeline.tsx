@@ -40,8 +40,9 @@ const STATUS_META: Record<string, {
 }> = {
   active:         { color: 'text-emerald-700', bg: 'bg-emerald-100', Icon: CheckCircle, label: 'Active'          },
   degraded:       { color: 'text-amber-700',   bg: 'bg-amber-100',   Icon: AlertCircle, label: 'Degraded'        },
+  // 'waiting' = no data yet; connector is healthy but ingestion hasn't populated DB
+  waiting:        { color: 'text-blue-600',    bg: 'bg-blue-50',     Icon: Clock,       label: 'Waiting for data' },
   down:           { color: 'text-red-700',     bg: 'bg-red-100',     Icon: WifiOff,     label: 'Down'            },
-  // FIX: 'not_integrated' replaces 'down' for planned Phase 2 connectors
   not_integrated: { color: 'text-gray-500',    bg: 'bg-gray-100',    Icon: WifiOff,     label: 'Not integrated'  },
   mock:           { color: 'text-amber-700',   bg: 'bg-amber-100',   Icon: AlertCircle, label: 'Mock'            },
 };

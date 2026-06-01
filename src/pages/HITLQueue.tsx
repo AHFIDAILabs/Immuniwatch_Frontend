@@ -9,6 +9,7 @@ import { EmptyState } from '../components/EmptyState';
 import { Modal } from '../components/Modal';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 import { formatRelative, LANG_LABELS, PLATFORM_LABELS, LABEL_META } from '../lib/utils';
 import type { HITLReview, ClassificationLabel, HITLPriority, PostLanguage, PostPlatform } from '../types/api';
 
@@ -200,8 +201,11 @@ function ContextStrip({ postId }: { postId: string }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function HITLQueue() {
-  const qc    = useQueryClient();
-  const toast = useToast().toast;
+  const qc          = useQueryClient();
+  const toast       = useToast().toast;
+  const { user }    = useAuth();
+  // Override (relabelling ML result) requires senior_analyst or above
+  const canOverride = user?.role === 'senior_analyst' || user?.role === 'supervisor' || user?.role === 'super_admin';
 
   const [page,           setPage]           = useState(1);
   const [priorityFilter, setPriorityFilter] = useState<HITLPriority | 'all'>('all');
@@ -277,7 +281,7 @@ export default function HITLQueue() {
       e.preventDefault();
       reject(id);
     }
-    if (e.key === 'o' || e.key === 'O') {
+    if ((e.key === 'o' || e.key === 'O') && canOverride) {
       e.preventDefault();
       const target = reviewsRef.current.find((rv) => rv._id === id);
       if (target) setOverrideTarget(target);
@@ -304,8 +308,10 @@ export default function HITLQueue() {
           <p className="text-[11px] text-gray-400 mt-0.5">
             Keyboard:{' '}
             <kbd className="px-1 py-0.5 bg-gray-100 border border-gray-300 rounded text-[10px]">A</kbd> approve ·{' '}
-            <kbd className="px-1 py-0.5 bg-gray-100 border border-gray-300 rounded text-[10px]">R</kbd> reject ·{' '}
-            <kbd className="px-1 py-0.5 bg-gray-100 border border-gray-300 rounded text-[10px]">O</kbd> override
+            <kbd className="px-1 py-0.5 bg-gray-100 border border-gray-300 rounded text-[10px]">R</kbd> reject
+            {canOverride && (
+              <> · <kbd className="px-1 py-0.5 bg-gray-100 border border-gray-300 rounded text-[10px]">O</kbd> override</>
+            )}
           </p>
         </div>
         <div className="flex gap-2">
@@ -430,14 +436,16 @@ export default function HITLQueue() {
                         {isActing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                         Approve
                       </button>
-                      <button
-                        onClick={() => { if (!isActing) setOverrideTarget(review); }}
-                        disabled={isActing}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-amber-400 text-amber-700 rounded-lg hover:bg-amber-50 disabled:opacity-60 disabled:cursor-not-allowed"
-                        title="Override label (O)"
-                      >
-                        <Edit3 className="h-3.5 w-3.5" /> Override label
-                      </button>
+                      {canOverride && (
+                        <button
+                          onClick={() => { if (!isActing) setOverrideTarget(review); }}
+                          disabled={isActing}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-amber-400 text-amber-700 rounded-lg hover:bg-amber-50 disabled:opacity-60 disabled:cursor-not-allowed"
+                          title="Override label (O)"
+                        >
+                          <Edit3 className="h-3.5 w-3.5" /> Override label
+                        </button>
+                      )}
                       <button
                         onClick={() => { if (!isActing) reject(review._id); }}
                         disabled={isActing}

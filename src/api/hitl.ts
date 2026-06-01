@@ -14,8 +14,8 @@ export const hitlApi = {
   reject: (id: string) =>
     api.post<HITLReview>(`/hitl/${id}/reject`).then((r) => r.data),
 
-  queuePost: (postId: string) =>
-    api.post<HITLReview>('/hitl/queue', { postId }).then((r) => r.data),
+  queuePost: (postId: string, priority: 'standard' | 'high' = 'standard') =>
+    api.post<HITLReview>('/hitl/queue', { postId, priority }).then((r) => r.data),
 
   myStats: () =>
     api.get<HITLMyStats>('/hitl/my-stats').then((r) => r.data),
