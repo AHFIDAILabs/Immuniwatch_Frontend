@@ -1,7 +1,11 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 
+// In dev the Vite proxy rewrites /api → /api/v1 on localhost:5000.
+// In production VITE_API_URL must include the full path: https://host.onrender.com/api/v1
+const BASE_URL = import.meta.env.VITE_API_URL ?? '/api';
+
 export const api = axios.create({
-  baseURL:         '/api',
+  baseURL:         BASE_URL,
   withCredentials: true,
   headers:         { 'Content-Type': 'application/json' },
 });
@@ -45,7 +49,7 @@ api.interceptors.response.use(
     isRefreshing    = true;
 
     try {
-      await axios.post('/api/auth/refresh', {}, { withCredentials: true });
+      await axios.post(`${BASE_URL}/auth/refresh`, {}, { withCredentials: true });
       drainQueue(null);
       return api(original);
     } catch (refreshErr: unknown) {
