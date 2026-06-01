@@ -89,7 +89,7 @@ const ORG_NAV: { label: string; items: NavItem[] }[] = [
       },
       {
         to: '/settings',  label: 'Settings',        Icon: Settings,
-        roles: ['org_admin'],
+        roles: ['supervisor', 'org_admin'],
       },
     ],
   },

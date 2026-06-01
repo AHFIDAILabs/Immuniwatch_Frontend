@@ -285,8 +285,12 @@ export default function HITLQueue() {
   const qc          = useQueryClient();
   const toast       = useToast().toast;
   const { user }    = useAuth();
-  // Override (relabelling ML result) requires senior_analyst or above
-  const canOverride = user?.role === 'senior_analyst' || user?.role === 'supervisor' || user?.role === 'super_admin';
+  // Override (relabelling ML result) — senior_analyst, supervisor, org_admin, super_admin
+  // Analysts can only approve or reject — they cannot change the ML label.
+  const canOverride = user?.role === 'senior_analyst'
+    || user?.role === 'supervisor'
+    || user?.role === 'org_admin'
+    || user?.role === 'super_admin';
 
   const [page,           setPage]           = useState(1);
   const [priorityFilter, setPriorityFilter] = useState<HITLPriority | 'all'>('all');

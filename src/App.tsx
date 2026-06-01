@@ -128,7 +128,7 @@ export default function App() {
         <Route
           path="settings"
           element={
-            <RequireAuth roles={['org_admin', 'super_admin']}>
+            <RequireAuth roles={['supervisor', 'org_admin', 'super_admin']}>
               <Settings />
             </RequireAuth>
           }

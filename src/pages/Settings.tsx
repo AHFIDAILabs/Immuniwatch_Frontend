@@ -97,7 +97,7 @@ function NumberSetting({
 export default function Settings() {
   const { user }  = useAuth();
   const qc        = useQueryClient();
-  const canEdit   = user?.role === 'supervisor' || user?.role === 'super_admin';
+  const canEdit   = user?.role === 'org_admin' || user?.role === 'supervisor' || user?.role === 'super_admin';
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['settings'],
@@ -236,7 +236,7 @@ export default function Settings() {
       {!canEdit && (
         <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-800">
           <Info className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-blue-500" />
-          <p>Settings are read-only for your role. Contact a Supervisor or Super Admin to make changes.</p>
+          <p>Settings are read-only for your role. Contact your Organization Admin or Supervisor to make changes.</p>
         </div>
       )}
 
