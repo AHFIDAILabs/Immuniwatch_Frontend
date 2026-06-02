@@ -127,6 +127,7 @@ function DispatchModal({ review, onClose }: { review: HITLReview; onClose: () =>
   const [version,     setVersion]     = useState<CNVersion>('short');
   const [copied,      setCopied]      = useState(false);
   const [mlAvailable, setMlAvailable] = useState(false);
+  const [cnSource,    setCnSource]    = useState<'ml' | 'groq' | null>(null);
   const [cnVersions,  setCnVersions]  = useState<Record<CNVersion, string>>({ short: '', medium: '', long: '' });
   const [done,        setDone]        = useState(false);
 
@@ -150,6 +151,7 @@ function DispatchModal({ review, onClose }: { review: HITLReview; onClose: () =>
       setCnVersions(versions);
       setText(versions.short || versions.medium || versions.long);
       setMlAvailable(true);
+      setCnSource(cnData.source ?? null);
     } else if (!text && kbSeed) {
       setText(kbSeed);
     }
@@ -225,9 +227,14 @@ function DispatchModal({ review, onClose }: { review: HITLReview; onClose: () =>
             <Loader2 className="h-3 w-3 animate-spin" /> Generating…
           </span>
         )}
-        {mlAvailable && !cnLoading && (
+        {mlAvailable && !cnLoading && cnSource === 'ml' && (
           <span className="flex-shrink-0 text-[10px] font-medium px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-200">
             ML generated
+          </span>
+        )}
+        {mlAvailable && !cnLoading && cnSource === 'groq' && (
+          <span className="flex-shrink-0 text-[10px] font-medium px-2 py-0.5 rounded bg-violet-50 text-violet-600 border border-violet-200">
+            AI generated (Groq)
           </span>
         )}
       </div>
