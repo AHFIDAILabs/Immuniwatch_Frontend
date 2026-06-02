@@ -127,7 +127,7 @@ function DispatchModal({ review, onClose }: { review: HITLReview; onClose: () =>
   const [version,     setVersion]     = useState<CNVersion>('short');
   const [copied,      setCopied]      = useState(false);
   const [mlAvailable, setMlAvailable] = useState(false);
-  const [cnSource,    setCnSource]    = useState<'ml' | 'groq' | null>(null);
+  const [cnSource,    setCnSource]    = useState<'ml' | 'groq' | 'template' | null>(null);
   const [cnVersions,  setCnVersions]  = useState<Record<CNVersion, string>>({ short: '', medium: '', long: '' });
   const [done,        setDone]        = useState(false);
 
@@ -235,6 +235,11 @@ function DispatchModal({ review, onClose }: { review: HITLReview; onClose: () =>
         {mlAvailable && !cnLoading && cnSource === 'groq' && (
           <span className="flex-shrink-0 text-[10px] font-medium px-2 py-0.5 rounded bg-violet-50 text-violet-600 border border-violet-200">
             AI generated (Groq)
+          </span>
+        )}
+        {mlAvailable && !cnLoading && cnSource === 'template' && (
+          <span className="flex-shrink-0 text-[10px] font-medium px-2 py-0.5 rounded bg-gray-100 text-gray-500 border border-gray-200">
+            Template — edit before sending
           </span>
         )}
       </div>

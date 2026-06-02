@@ -20,7 +20,7 @@ export interface DispatchRecord {
 export interface CounterNarrativeResult {
   available:        boolean;
   postId:           string | null;
-  source?:          'ml' | 'groq';  // which service generated the content
+  source?:          'ml' | 'groq' | 'template';  // which service generated the content
   counterNarrative: string | null;  // same as short (legacy)
   short?:           string | null;  // ≤280 chars — pre-fill by default
   medium?:          string | null;  // ≤200 words
