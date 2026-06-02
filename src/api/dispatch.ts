@@ -20,7 +20,11 @@ export interface DispatchRecord {
 export interface CounterNarrativeResult {
   available:        boolean;
   postId:           string | null;
-  counterNarrative: string | null;
+  counterNarrative: string | null;  // same as short (legacy field)
+  short?:           string | null;  // ≤280 chars — pre-fill by default
+  medium?:          string | null;  // ≤200 words
+  long?:            string | null;  // ≤500 words
+  sources?:         string[];
   platform:         string | null;
 }
 

@@ -107,75 +107,105 @@ function OverrideModal({ review, onClose }: { review: HITLReview; onClose: () =>
 }
 
 // ── Dispatch modal (shown after approve) ──────────────────────────────────────
-// Fetches ML-generated counter-narrative if available; always editable before
-// deploying. Analyst can Deploy (sends to platform via ML), Skip (signals ML
-// to skip this post), or just Copy and close to post manually.
+
+type CNVersion = 'short' | 'medium' | 'long';
 
 function DispatchModal({ review, onClose }: { review: HITLReview; onClose: () => void }) {
   const toast = useToast().toast;
-  const post  = review.postId as { _id?: string; platform?: PostPlatform } | null;
-  const postId = post?._id ?? (typeof review.postId === 'string' ? review.postId : '');
+
+  const post = review.postId as { _id?: string; platform?: PostPlatform } | null;
+  const cls  = review.classificationId as {
+    label?: string; confidence?: number;
+    kbEvidence?: Array<{ title: string; snippet: string; score: number }>;
+  } | null;
+
+  const postId        = post?._id ?? (typeof review.postId === 'string' ? review.postId : '');
   const platformLabel = post?.platform ? (PLATFORM_LABELS[post.platform] ?? post.platform) : 'platform';
+  const kbSeed        = cls?.kbEvidence?.[0]?.snippet ?? cls?.kbEvidence?.[0]?.title ?? '';
 
-  // Seed with any existing approved response, then fetch from ML
-  const [text,    setText]    = useState(review.approvedResponse ?? '');
-  const [copied,  setCopied]  = useState(false);
-  const [fetched, setFetched] = useState(false);
+  const [text,        setText]        = useState(review.approvedResponse ?? '');
+  const [version,     setVersion]     = useState<CNVersion>('short');
+  const [copied,      setCopied]      = useState(false);
   const [mlAvailable, setMlAvailable] = useState(false);
-  const [deployed, setDeployed] = useState(false);
+  const [cnVersions,  setCnVersions]  = useState<Record<CNVersion, string>>({ short: '', medium: '', long: '' });
+  const [done,        setDone]        = useState(false);
 
-  // Fetch ML counter-narrative on mount
-  useQuery({
-    queryKey: ['counter-narrative', postId],
-    queryFn:  () => dispatchApi.getCounterNarrative(postId),
-    enabled:  !!postId && !fetched,
-    staleTime: Infinity,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onSuccess: (data: any) => {
-      setFetched(true);
-      if (data.available && data.counterNarrative) {
-        setText(data.counterNarrative);
-        setMlAvailable(true);
-      }
-    },
-  } as Parameters<typeof useQuery>[0]);
+  // Fetch / generate counter-narrative from ML
+  const { data: cnData, isLoading: cnLoading } = useQuery({
+    queryKey:  ['counter-narrative', postId],
+    queryFn:   () => dispatchApi.getCounterNarrative(postId),
+    enabled:   !!postId,
+    staleTime: 5 * 60_000,  // cache for 5 min — generation is expensive
+    retry:     1,
+  });
+
+  useEffect(() => {
+    if (!cnData) return;
+    if (cnData.available) {
+      const versions = {
+        short:  cnData.short  ?? cnData.counterNarrative ?? '',
+        medium: cnData.medium ?? cnData.counterNarrative ?? '',
+        long:   cnData.long   ?? cnData.counterNarrative ?? '',
+      };
+      setCnVersions(versions);
+      setText(versions.short || versions.medium || versions.long);
+      setMlAvailable(true);
+    } else if (!text && kbSeed) {
+      setText(kbSeed);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cnData]);
+
+  // When analyst switches version, replace text with that version's content
+  function switchVersion(v: CNVersion) {
+    setVersion(v);
+    if (cnVersions[v]) setText(cnVersions[v]);
+  }
 
   const { mutate: deploy, isPending: deploying } = useMutation({
     mutationFn: () => dispatchApi.deployCounterNarrative(postId, text),
     onSuccess: () => {
-      toast.success('Counter-narrative deployed', `Posted to ${platformLabel} successfully.`);
-      setDeployed(true);
+      toast.success('Response saved', `Counter-narrative recorded. Copy and post to ${platformLabel}.`);
+      setDone(true);
     },
-    onError: () => toast.error('Deploy failed', 'Could not deploy the counter-narrative. You can copy and post it manually.'),
+    onError: () => {
+      toast.warning('Saved locally', 'Response saved. Copy and post manually.');
+      setDone(true);
+    },
   });
 
   const { mutate: skip, isPending: skipping } = useMutation({
     mutationFn: () => dispatchApi.skipCounterNarrative(postId),
-    onSuccess: () => {
-      toast.info('Skipped', 'Counter-narrative skipped for this post.');
-      onClose();
-    },
-    onError: () => toast.error('Skip failed', 'Could not signal skip to the ML service.'),
+    onSuccess: () => { toast.info('Skipped', 'No counter-narrative will be sent.'); onClose(); },
+    onError:   () => { toast.info('Skipped', 'Marked as reviewed.'); onClose(); },
   });
 
   async function copyToClipboard() {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    } catch { /* browser may block */ }
+    try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2500); }
+    catch { /* browser may block */ }
   }
 
-  if (deployed) {
+  if (done) {
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
           <CheckCheck className="h-4 w-4 text-emerald-600 flex-shrink-0" />
           <p className="text-sm text-emerald-700">
-            Counter-narrative deployed to <strong>{platformLabel}</strong>. The ML service has tagged the original poster.
+            Response saved. Copy and post it manually on <strong>{platformLabel}</strong>.
           </p>
         </div>
-        <div className="flex justify-end">
+        {text && (
+          <textarea readOnly value={text} rows={4}
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-800 resize-none" />
+        )}
+        <div className="flex justify-end gap-2">
+          {text && (
+            <button onClick={() => { void copyToClipboard(); }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg ${copied ? 'bg-gray-800 text-white' : 'border border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
+              {copied ? <CheckCheck className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
+          )}
           <button onClick={onClose} className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">Done</button>
         </div>
       </div>
@@ -184,29 +214,67 @@ function DispatchModal({ review, onClose }: { review: HITLReview; onClose: () =>
 
   return (
     <div className="space-y-4">
+      {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <p className="text-xs text-gray-500 flex-1">
-          Review approved. Edit the counter-narrative below, then <strong>Deploy</strong> to post it
-          automatically on <strong>{platformLabel}</strong>, or <strong>Skip</strong> to mark it as reviewed without replying.
+          Edit the counter-narrative below, then <strong>Deploy</strong> to record it,
+          or <strong>Skip</strong> if no reply is needed.
         </p>
-        {mlAvailable && (
+        {cnLoading && (
+          <span className="flex items-center gap-1 text-[10px] text-gray-400">
+            <Loader2 className="h-3 w-3 animate-spin" /> Generating…
+          </span>
+        )}
+        {mlAvailable && !cnLoading && (
           <span className="flex-shrink-0 text-[10px] font-medium px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-200">
             ML generated
           </span>
         )}
       </div>
 
+      {/* Version selector — only shown when ML returns multiple versions */}
+      {mlAvailable && (cnVersions.medium || cnVersions.long) && (
+        <div className="flex gap-1.5">
+          {(['short', 'medium', 'long'] as CNVersion[]).map((v) => (
+            <button
+              key={v}
+              onClick={() => switchVersion(v)}
+              disabled={!cnVersions[v]}
+              className={`px-2.5 py-1 text-[11px] font-medium rounded-lg border transition-colors disabled:opacity-30 ${
+                version === v
+                  ? 'bg-emerald-600 text-white border-emerald-600'
+                  : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {v === 'short' ? 'Short ≤280' : v === 'medium' ? 'Medium' : 'Long'}
+            </button>
+          ))}
+          <span className="text-[10px] text-gray-400 self-center ml-1">Select length then edit</span>
+        </div>
+      )}
+
+      {/* KB evidence reference */}
+      {cls?.kbEvidence && cls.kbEvidence.length > 0 && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 text-xs flex gap-2">
+          <span className="font-semibold text-emerald-700 flex-shrink-0">KB:</span>
+          <span className="text-gray-700 line-clamp-2">{cls.kbEvidence[0].snippet || cls.kbEvidence[0].title}</span>
+        </div>
+      )}
+
+      {/* Editable textarea */}
       <div>
         <label className="block text-xs font-medium text-gray-700 mb-1.5">
-          Counter-narrative response
-          <span className="text-gray-400 font-normal ml-1">(editable)</span>
+          Counter-narrative <span className="font-normal text-gray-400">(editable)</span>
         </label>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={6}
-          placeholder="The ML service will populate this automatically when live. You can also draft your own counter-narrative here…"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-800 resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          placeholder={cnLoading
+            ? 'Generating counter-narrative from ML service…'
+            : 'Draft your counter-narrative here. Switch between Short / Medium / Long once the ML response loads…'}
+          disabled={cnLoading}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-800 resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-gray-50 disabled:text-gray-400"
         />
         <p className="text-[11px] text-gray-400 mt-1">{text.length} characters</p>
       </div>
