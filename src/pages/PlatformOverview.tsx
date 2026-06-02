@@ -268,14 +268,14 @@ export default function PlatformOverview() {
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
         <StatCard label="Total organizations" value={summary.totalOrgs}   icon={Building2}      color="green" />
         <StatCard label="Total users"          value={summary.totalUsers}  icon={Users}          color="indigo" />
         <StatCard label="Posts today"          value={summary.postsToday}  icon={Radio}          color="yellow" />
         <StatCard label="HITL pending"         value={summary.hitlPending} icon={ClipboardCheck} color="red" />
       </div>
 
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
         <StatCard label="Active orgs"    value={summary.activeOrgs}  icon={TrendingUp}     color="green" />
         <StatCard label="Total posts"    value={summary.postsTotal}  icon={Radio}          color="indigo" />
         <StatCard label="Open alerts"    value={summary.openAlerts}  icon={AlertTriangle}  color="red" />

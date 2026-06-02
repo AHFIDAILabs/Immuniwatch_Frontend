@@ -83,7 +83,7 @@ function AnalystView() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
         <StatCard label="Posts ingested today"   value={totalToday.toLocaleString()}              icon={FileText}     color="indigo" />
         <StatCard label="Flagged today"          value={flaggedToday.toLocaleString()}            icon={AlertTriangle} color="red"   />
         <StatCard label="Awaiting HITL review"  value={(hitlPending?.total ?? 0).toLocaleString()} icon={Clock}       color="yellow" />
@@ -173,7 +173,7 @@ function SeniorAnalystView() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
         <StatCard label="My reviews today"     value={(myStats?.reviewedToday   ?? 0).toString()} icon={CheckSquare}  color="green"  />
         <StatCard label="My reviews this week" value={(myStats?.reviewedThisWeek ?? 0).toString()} icon={BarChart2}   color="indigo" />
         <StatCard label="My override rate"     value={`${myStats?.overrideRate ?? 0}%`}           icon={AlertTriangle} color="yellow" />
@@ -267,7 +267,7 @@ function SupervisorView() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
         <StatCard label="Team reviews today"    value={(teamStats?.reviewedToday   ?? 0).toString()} icon={CheckSquare}  color="green"  />
         <StatCard label="Team override rate"    value={`${teamStats?.overrideRate ?? 0}%`}           icon={AlertTriangle} color="yellow" />
         <StatCard label="Active alerts"         value={(recentAlerts.length).toString()}              icon={ShieldAlert}  color="red"    />
@@ -449,7 +449,7 @@ function SuperAdminView() {
       )}
 
       {/* Stats row 1 */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
         <StatCard label="Posts ingested today"  value={todayTotal.toLocaleString()}                            icon={FileText}      color="indigo" />
         <StatCard label="Flagged (7 days)"      value={flaggedCount.toLocaleString()}                          icon={AlertTriangle} color="red"    />
         <StatCard label="Awaiting HITL review"  value={(hitlPending?.total ?? 0).toLocaleString()}             icon={Clock}         color="yellow" />
@@ -457,7 +457,7 @@ function SuperAdminView() {
       </div>
 
       {/* Stats row 2 — team */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
         <StatCard label="Team reviews today"  value={(teamStats?.reviewedToday   ?? 0).toString()}         icon={CheckSquare} color="emerald" />
         <StatCard label="Team override rate"  value={`${teamStats?.overrideRate ?? 0}%`}                   icon={BarChart2}   color="yellow"  />
         <StatCard label="Pending (high)"      value={(teamStats?.pendingHigh    ?? 0).toString()}           icon={ShieldAlert} color="red"     />

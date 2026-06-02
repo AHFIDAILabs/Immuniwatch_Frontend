@@ -375,7 +375,8 @@ export default function Users() {
         ) : users.length === 0 ? (
           <EmptyState title="No users" />
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[540px]">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</th>
@@ -468,6 +469,7 @@ export default function Users() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 

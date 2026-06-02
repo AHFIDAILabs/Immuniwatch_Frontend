@@ -198,7 +198,7 @@ export default function Posts() {
 
       {/* Filters */}
       <div className="glass-card p-3 flex flex-wrap gap-2">
-        <form onSubmit={handleSearch} className="flex-1 min-w-48 flex gap-2">
+        <form onSubmit={handleSearch} className="w-full sm:flex-1 sm:min-w-48 flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
             <input
@@ -255,16 +255,7 @@ export default function Posts() {
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="w-full text-xs" style={{ tableLayout: 'fixed' }}>
-                <colgroup>
-                  <col style={{ width: '34%' }} />
-                  <col style={{ width: '11%' }} />
-                  <col style={{ width: '6%'  }} />
-                  <col style={{ width: '12%' }} />
-                  <col style={{ width: '15%' }} />
-                  <col style={{ width: '10%' }} />
-                  <col style={{ width: '12%' }} />
-                </colgroup>
+              <table className="w-full text-xs min-w-[640px]">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="px-3 py-2.5 text-left font-semibold text-gray-500 uppercase tracking-wide text-[10px]">Post excerpt</th>

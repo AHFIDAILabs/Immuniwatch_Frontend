@@ -186,7 +186,7 @@ export default function IngestionPipeline() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
         <StatCard label="Active connectors" value={`${activeConnectors} / ${totalConnectors}`} icon={Wifi}        color="green"  />
         <StatCard label="Events / min"       value={totalEPM.toLocaleString()}                  icon={Activity}    color="indigo" />
         <StatCard label="Kafka lag"          value={kafka ? `${kafka.kafkaLagMs}ms` : '—'}      icon={Network}     color="yellow" />

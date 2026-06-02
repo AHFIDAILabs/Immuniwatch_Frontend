@@ -62,7 +62,8 @@ export default function AuditLog() {
           <EmptyState title="No audit entries" />
         ) : (
           <>
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[600px]">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Actor</th>
@@ -91,6 +92,7 @@ export default function AuditLog() {
                 ))}
               </tbody>
             </table>
+            </div>
             {totalPages > 1 && (
               <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
                 <span className="text-xs text-gray-500">Page {page} of {totalPages}</span>

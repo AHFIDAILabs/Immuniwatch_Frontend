@@ -467,10 +467,10 @@ export default function HITLQueue() {
   return (
     <div className="space-y-4">
       {/* Header + tabs */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-base font-semibold text-gray-900">HITL review queue</h1>
-          <p className="text-[11px] text-gray-400 mt-0.5">
+          <p className="hidden sm:block text-[11px] text-gray-400 mt-0.5">
             Keyboard:{' '}
             <kbd className="px-1 py-0.5 bg-gray-100 border border-gray-300 rounded text-[10px]">A</kbd> approve ·{' '}
             <kbd className="px-1 py-0.5 bg-gray-100 border border-gray-300 rounded text-[10px]">R</kbd> reject
@@ -479,7 +479,7 @@ export default function HITLQueue() {
             )}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {TABS.map(({ key, label }) => (
             <button
               key={key}

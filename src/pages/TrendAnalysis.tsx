@@ -82,7 +82,7 @@ export default function TrendAnalysis() {
       {isError && <ErrorBanner message="Failed to load trend data." />}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
         <StatCard label="Posts analysed (7d)" value={totalPosts.toLocaleString()} icon={Layers} color="indigo" />
         <StatCard label="Flagged (7d)" value={flagged.toLocaleString()} icon={AlertTriangle} color="red" />
         <StatCard label="Flag rate (7d)" value={`${flagRate}%`} icon={TrendingUp} color="yellow" />

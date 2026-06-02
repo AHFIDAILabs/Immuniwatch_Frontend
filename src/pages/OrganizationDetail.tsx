@@ -293,7 +293,8 @@ export default function OrganizationDetail() {
             </p>
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[480px]">
             <thead className="bg-gray-50">
               <tr>
                 {['Name', 'Email', 'Role', 'Status', 'Last Active'].map((h) => (
@@ -323,6 +324,7 @@ export default function OrganizationDetail() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 

@@ -1,87 +1,95 @@
 import { useState, useRef, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
-import { Bell } from 'lucide-react';
+import { Bell, Menu } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { Sidebar } from './Sidebar';
 import { ErrorBoundary } from './ErrorBoundary';
 
 const PAGE_TITLES: Record<string, string> = {
-  '/dashboard':      'Overview',
-  '/hitl':           'HITL Review',
-  '/posts':          'Live post feed',
-  '/dispatch':       'Response dispatch',
-  '/trends':         'Trend analysis',
-  '/knowledge-base': 'Knowledge base',
-  '/ingestion':      'Ingestion pipeline',
-  '/model-health':   'Model health',
-  '/audit-log':      'Audit log',
-  '/users':          'User management',
-  '/settings':       'Settings',
-  '/alerts':         'Alerts',
+  '/dashboard':         'Overview',
+  '/hitl':              'HITL Review',
+  '/posts':             'Live post feed',
+  '/dispatch':          'Response dispatch',
+  '/trends':            'Trend analysis',
+  '/knowledge-base':    'Knowledge base',
+  '/ingestion':         'Ingestion pipeline',
+  '/model-health':      'Model health',
+  '/audit-log':         'Audit log',
+  '/users':             'User management',
+  '/settings':          'Settings',
+  '/alerts':            'Alerts',
+  '/organizations':     'Organizations',
+  '/platform/overview': 'Platform overview',
 };
 
 const NOTIFICATIONS = [
   { id: 1, color: 'bg-red-500',    text: 'Surge detected: "Jigi ta causes infertility" — 247 posts in 2 hrs (Hausa)', time: '2 min ago' },
   { id: 2, color: 'bg-red-500',    text: 'Coordinated cluster: OPV-polio link campaign on Facebook (Pidgin)', time: '19 min ago' },
   { id: 3, color: 'bg-amber-500',  text: 'Model drift: Yoruba PSI = 0.22 — retraining recommended', time: '1 hr ago' },
-  { id: 4, color: 'bg-blue-500',   text: '14 posts escalated to high-priority HITL queue by auto-classifier', time: '2 hr ago' },
+  { id: 4, color: 'bg-blue-500',   text: '14 posts escalated to high-priority HITL queue', time: '2 hr ago' },
   { id: 5, color: 'bg-emerald-500',text: 'Monthly model retraining completed — macro-F1 improved to 0.847', time: '3 hr ago' },
 ];
 
 export function Layout() {
   const location = useLocation();
-  const [notifOpen, setNotifOpen] = useState(false);
-  const [readIds, setReadIds]     = useState<Set<number>>(() => new Set());
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notifOpen,   setNotifOpen]   = useState(false);
+  const [readIds,     setReadIds]     = useState<Set<number>>(() => new Set());
   const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) setNotifOpen(false);
+    }
+    if (notifOpen) document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [notifOpen]);
+
+  useEffect(() => { setNotifOpen(false); }, [location.pathname]);
 
   const title  = PAGE_TITLES[location.pathname] ?? 'Overview';
   const unread = NOTIFICATIONS.filter((n) => !readIds.has(n.id)).length;
 
   const { data: liveStats } = useQuery({
     queryKey: ['stats', 'live'],
-    queryFn: () => api.get<{ postsLastHour: number; pendingHITL: number }>('/stats/live').then((r) => r.data),
+    queryFn:  () => api.get<{ postsLastHour: number; pendingHITL: number }>('/stats/live').then((r) => r.data),
     refetchInterval: 60_000,
     staleTime:       30_000,
   });
 
-  function markAll() {
-    setReadIds(new Set(NOTIFICATIONS.map((n) => n.id)));
-  }
-
-  // Close panel on outside click
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        setNotifOpen(false);
-      }
-    }
-    if (notifOpen) document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [notifOpen]);
-
   return (
     <div className="flex h-screen app-bg overflow-hidden">
-      <Sidebar />
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Topbar */}
-        <header className="h-12 glass-topbar flex items-center px-5 gap-3 flex-shrink-0 z-10">
-          <span className="text-sm font-medium text-gray-900 flex-1">{title}</span>
+        <header className="h-12 glass-topbar flex items-center px-3 md:px-5 gap-2 md:gap-3 flex-shrink-0 z-10">
+
+          {/* Hamburger — mobile only */}
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="md:hidden p-1.5 rounded-md text-gray-500 hover:text-gray-700 hover:bg-white/60 transition-colors flex-shrink-0"
+            aria-label="Open navigation"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+
+          <span className="text-sm font-semibold text-gray-900 flex-1 truncate">{title}</span>
 
           {/* Live indicator */}
-          <div className="flex items-center gap-1.5">
+          <div className="hidden sm:flex items-center gap-1.5 flex-shrink-0">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
             </span>
-            <span className="text-xs text-gray-500">
-              Live · {liveStats ? `${liveStats.postsLastHour.toLocaleString()}/hr` : '—'}
+            <span className="text-xs text-gray-500 whitespace-nowrap">
+              {liveStats ? `${liveStats.postsLastHour.toLocaleString()}/hr` : 'Live'}
             </span>
           </div>
 
           {/* Notification bell */}
-          <div className="relative" ref={panelRef}>
+          <div className="relative flex-shrink-0" ref={panelRef}>
             <button
               onClick={() => setNotifOpen((o) => !o)}
               className="relative w-8 h-8 rounded-md glass-card flex items-center justify-center hover:bg-white/90 transition-colors"
@@ -94,42 +102,38 @@ export function Layout() {
             </button>
 
             {notifOpen && (
-              <div className="absolute top-10 right-0 w-80 glass-dropdown rounded-xl z-50">
+              <div className="absolute top-10 right-0 w-[min(calc(100vw-1rem),20rem)] glass-dropdown rounded-xl z-50 shadow-xl">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-white/40">
                   <span className="text-sm font-semibold text-gray-900">
                     Notifications{' '}
-                    {unread > 0 && (
-                      <span className="ml-1 text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded-full">{unread}</span>
-                    )}
+                    {unread > 0 && <span className="ml-1 text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded-full">{unread}</span>}
                   </span>
-                  <button onClick={markAll} className="text-xs text-emerald-600 hover:text-emerald-800">
+                  <button onClick={() => setReadIds(new Set(NOTIFICATIONS.map((n) => n.id)))}
+                    className="text-xs text-emerald-600 hover:text-emerald-800">
                     Mark all read
                   </button>
                 </div>
-                <div className="divide-y divide-white/40 max-h-80 overflow-y-auto">
+                <div className="divide-y divide-white/40 max-h-72 overflow-y-auto">
                   {NOTIFICATIONS.map((n) => (
-                    <div
-                      key={n.id}
+                    <div key={n.id}
                       onClick={() => setReadIds((prev) => new Set([...prev, n.id]))}
-                      className={`flex gap-3 px-4 py-3 cursor-pointer hover:bg-white/40 transition-colors ${!readIds.has(n.id) ? 'bg-emerald-50/50' : ''}`}
-                    >
+                      className={`flex gap-3 px-4 py-3 cursor-pointer hover:bg-white/40 transition-colors ${!readIds.has(n.id) ? 'bg-emerald-50/50' : ''}`}>
                       <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1 ${n.color}`} />
-                      <div>
+                      <div className="min-w-0">
                         <p className="text-xs text-gray-800 leading-snug">{n.text}</p>
                         <time className="text-[10px] text-gray-400 mt-0.5 block">{n.time}</time>
                       </div>
                     </div>
                   ))}
                 </div>
-                <div className="px-4 py-2 text-center text-[11px] text-gray-400 border-t border-white/40">
-                  No older notifications
-                </div>
+                <div className="px-4 py-2 text-center text-[11px] text-gray-400 border-t border-white/40">No older notifications</div>
               </div>
             )}
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-5">
+        {/* Page content */}
+        <main className="flex-1 overflow-y-auto p-3 md:p-5">
           <ErrorBoundary scope={title}>
             <Outlet />
           </ErrorBoundary>
