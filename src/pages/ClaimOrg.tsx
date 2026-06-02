@@ -54,6 +54,8 @@ export default function ClaimOrg() {
     try {
       await authApi.acceptOrgClaim({ token: token!, name: form.name, email: form.email, password: form.password });
       setState('success');
+      // Auto-navigate to login after 2.5 seconds
+      setTimeout(() => navigate('/login'), 2500);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setError(msg ?? 'Something went wrong. Please try again.');
@@ -82,16 +84,16 @@ export default function ClaimOrg() {
           </div>
           <h1 className="text-xl font-bold text-gray-900 mb-2">You're all set!</h1>
           <p className="text-sm text-gray-500 mb-2">
-            Your administrator account for <strong>{orgName}</strong> has been created.
+            Your administrator account for <strong>{orgName}</strong> has been created. Redirecting to login…
           </p>
           <p className="text-xs text-gray-400 mb-6">
-            Log in with your email and the password you just set to access the dashboard.
+            Sign in with <strong>{form.email}</strong> and the password you just set.
           </p>
           <button
             onClick={() => navigate('/login')}
             className="w-full py-2.5 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700 transition-colors"
           >
-            Go to Login
+            Go to Login now
           </button>
         </div>
       </div>

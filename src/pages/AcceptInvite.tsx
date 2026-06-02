@@ -50,6 +50,8 @@ export default function AcceptInvite() {
     try {
       await authApi.acceptInvite(token!, password);
       setState('success');
+      // Auto-navigate to login after 2.5 seconds so user doesn't have to click
+      setTimeout(() => navigate('/login'), 2500);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setError(msg ?? 'Something went wrong. Please try again.');
@@ -77,14 +79,17 @@ export default function AcceptInvite() {
             <CheckCircle className="h-8 w-8 text-emerald-600" />
           </div>
           <h1 className="text-xl font-bold text-gray-900 mb-2">Password set!</h1>
-          <p className="text-sm text-gray-500 mb-6">
-            Your account is ready. You can now log in with your email and the password you just created.
+          <p className="text-sm text-gray-500 mb-2">
+            Your account is ready. Redirecting you to sign in…
+          </p>
+          <p className="text-xs text-gray-400 mb-6">
+            Use <strong>{info?.email}</strong> and the password you just created.
           </p>
           <button
             onClick={() => navigate('/login')}
             className="w-full py-2.5 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700 transition-colors"
           >
-            Go to Login
+            Go to Login now
           </button>
         </div>
       </div>

@@ -5,7 +5,7 @@ import type { AuthUser } from '../types/api';
 interface AuthContextValue {
   user:          AuthUser | null;
   isLoading:     boolean;
-  isDeactivated: boolean;   // true when server returns ACCOUNT_DEACTIVATED
+  isDeactivated: boolean;
   login:         (email: string, password: string) => Promise<void>;
   logout:        () => Promise<void>;
 }
@@ -24,13 +24,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading,     setLoading]      = useState(true);
   const [isDeactivated, setDeactivated]  = useState(false);
 
+  // On mount — restore session from the HttpOnly cookie via /auth/me
   useEffect(() => {
     authApi.me()
       .then((u) => { setUser(u); setDeactivated(false); })
       .catch((err) => {
         setUser(null);
-        // Only mark as deactivated if we got that specific code — a plain 401
-        // (unauthenticated visitor on a public page) must NOT set isDeactivated.
         if (isDeactivatedError(err)) setDeactivated(true);
         else setDeactivated(false);
       })
@@ -39,8 +38,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     try {
-      const { user: authUser } = await authApi.login(email, password);
-      setUser(authUser);
+      // Step 1: Authenticate — this sets the HttpOnly cookies on the backend
+      await authApi.login(email, password);
+
+      // Step 2: Immediately verify the session by calling me().
+      // This confirms the cookies were received and are being sent correctly
+      // (critical for cross-origin production deployments).
+      // me() also returns the FULL user object including organization context.
+      const fullUser = await authApi.me();
+      setUser(fullUser);
       setDeactivated(false);
     } catch (err) {
       if (isDeactivatedError(err)) {
