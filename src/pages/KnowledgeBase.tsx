@@ -130,9 +130,15 @@ export default function KnowledgeBase() {
 
   const { mutate: reindex, isPending: reindexing } = useMutation({
     mutationFn: () => kbApi.reindex(),
-    onSuccess: () => {
+    onSuccess: (result: unknown) => {
       void qc.invalidateQueries({ queryKey: ['kb'] });
-      toast.success('Reindex complete', 'All documents have been re-indexed.');
+      const r = result as { processed?: number; mlSynced?: number; total?: number } | undefined;
+      toast.success(
+        'Reindex complete',
+        r
+          ? `${r.processed ?? 0} embedded · ${r.mlSynced ?? 0} synced to ML ChromaDB · ${r.total ?? 0} total`
+          : 'All documents re-indexed and synced to ML.',
+      );
     },
     onError: () => toast.error('Reindex failed', 'Please try again in a moment.'),
   });
@@ -226,15 +232,22 @@ export default function KnowledgeBase() {
                       {LANG_FLAGS[doc.language] ?? ''} {doc.language?.toUpperCase()}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs font-medium capitalize px-2 py-0.5 rounded ${
-                        doc.status === 'ready'
-                          ? 'bg-green-100 text-green-700'
-                          : doc.status === 'processing'
-                          ? 'bg-blue-100 text-blue-700'
-                          : 'bg-red-100 text-red-700'
-                      }`}>
-                        {doc.status ?? 'unknown'}
-                      </span>
+                      {doc.status === 'ready' ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          Indexed
+                        </span>
+                      ) : doc.status === 'processing' ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded bg-blue-100 text-blue-700">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                          Indexing…
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded bg-amber-100 text-amber-700">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                          Not synced
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-400">{formatDateTime(doc.createdAt)}</td>
                     <td className="px-4 py-3">

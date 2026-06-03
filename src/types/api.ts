@@ -199,16 +199,18 @@ export interface RetrainingHistory {
 // ── Knowledge Base ────────────────────────────────────────────────────────────
 
 export interface KBDocument {
-  _id: string;
-  title: string;
-  source: string;
-  language: PostLanguage;
+  _id:           string;
+  title:         string;
+  source:        string;
+  language:      PostLanguage;
   cloudinaryUrl?: string;
-  embedded: boolean;
-  status?: "ready" | "processing" | "failed";
-  chunkCount?: number;
-  tags: string[];
-  createdAt: string;
+  embedded:      boolean;
+  mlIndexed?:    boolean;
+  mlDocId?:      string;
+  status?:       "ready" | "not_synced" | "processing" | "failed";
+  chunkCount?:   number;
+  tags:          string[];
+  createdAt:     string;
 }
 
 // ── Users ─────────────────────────────────────────────────────────────────────
