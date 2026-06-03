@@ -1,4 +1,6 @@
 ﻿import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect, useRef } from 'react';
+import { Radio } from 'lucide-react';
 import {
   FileText, AlertTriangle, Clock, Send,
   CheckSquare, BarChart2, Users, ShieldAlert,
@@ -12,6 +14,7 @@ import { FallbackModeAlert } from '../components/FallbackModeAlert';
 import { RetrainingProgressBanner } from '../components/RetrainingProgressBanner';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { trendsApi } from '../api/trends';
+import { postsApi }  from '../api/posts';
 import { alertsApi } from '../api/alerts';
 import { modelHealthApi } from '../api/modelHealth';
 import { hitlApi } from '../api/hitl';
@@ -21,7 +24,7 @@ import { formatRelative, LANG_LABELS, PLATFORM_LABELS } from '../lib/utils';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
-import type { Alert, PostLanguage, PostPlatform } from '../types/api';
+import type { Alert, Post, PostLanguage, PostPlatform } from '../types/api';
 
 // ── Mini sparkbar used in the narratives table ────────────────────────────────
 function SparkBar({ data }: { data: number[] }) {
@@ -46,6 +49,181 @@ function SparkBar({ data }: { data: number[] }) {
   );
 }
 const LANG_ORDER: PostLanguage[] = ['en', 'pcm', 'ha', 'yo', 'ig'];
+
+// ── Label colours for the ticker ─────────────────────────────────────────────
+
+const LABEL_TICKER: Record<string, { bg: string; text: string; dot: string }> = {
+  misinformation: { bg: 'bg-red-50',     text: 'text-red-700',     dot: 'bg-red-500'     },
+  disinformation: { bg: 'bg-pink-50',    text: 'text-pink-700',    dot: 'bg-pink-500'    },
+  factual:        { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
+  irrelevant:     { bg: 'bg-gray-50',    text: 'text-gray-600',    dot: 'bg-gray-400'    },
+};
+
+const PLATFORM_COLORS: Record<string, string> = {
+  bluesky:    'bg-sky-100    text-sky-700',
+  youtube:    'bg-red-100    text-red-700',
+  twitter:    'bg-blue-100   text-blue-700',
+  facebook:   'bg-indigo-100 text-indigo-700',
+  submission: 'bg-gray-100   text-gray-600',
+};
+
+// ── Live Post Ticker ──────────────────────────────────────────────────────────
+
+const CYCLE_MS = 5000;  // milliseconds per post
+
+function LivePostTicker() {
+  const { data, refetch } = useQuery({
+    queryKey:        ['posts', 'ticker'],
+    queryFn:         () => postsApi.list({ limit: 60, labeled: true }),
+    refetchInterval: 60_000,   // pull fresh posts every minute
+    staleTime:       30_000,
+  });
+
+  // Only show classified, non-pending posts
+  const posts: Post[] = (data?.data ?? []).filter(
+    (p) => p.classification?.label && p.classification.label !== 'pending',
+  );
+
+  const [idx,     setIdx]     = useState(0);
+  const [visible, setVisible] = useState(true);
+  const [progress, setProgress] = useState(0);
+  const intervalRef   = useRef<ReturnType<typeof setInterval> | null>(null);
+  const progressRef   = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Reset to 0 when posts list changes
+  useEffect(() => { setIdx(0); }, [posts.length]);
+
+  // Auto-cycle with fade + progress bar
+  useEffect(() => {
+    if (posts.length <= 1) return;
+
+    // Progress bar ticks every 50 ms
+    setProgress(0);
+    progressRef.current = setInterval(() => {
+      setProgress((p) => Math.min(100, p + (50 / CYCLE_MS) * 100));
+    }, 50);
+
+    intervalRef.current = setInterval(() => {
+      // Fade out
+      setVisible(false);
+      setTimeout(() => {
+        setIdx((i) => (i + 1) % posts.length);
+        setProgress(0);
+        setVisible(true);
+      }, 350);
+    }, CYCLE_MS);
+
+    return () => {
+      if (intervalRef.current)  clearInterval(intervalRef.current);
+      if (progressRef.current)  clearInterval(progressRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [posts.length]);
+
+  const post = posts[idx];
+  const cls  = post?.classification;
+  const label = cls?.label ?? 'pending';
+  const conf  = cls?.confidence ?? 0;
+  const meta  = LABEL_TICKER[label] ?? LABEL_TICKER.irrelevant;
+  const platformCls = PLATFORM_COLORS[post?.platform ?? ''] ?? PLATFORM_COLORS.submission;
+
+  return (
+    <div className="glass-card p-4 flex flex-col h-full min-h-[280px]">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+          </span>
+          <h2 className="text-xs font-semibold text-gray-700">Live Classification Feed</h2>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-gray-400 tabular-nums">
+            {posts.length > 0 ? `${idx + 1} / ${posts.length}` : '—'}
+          </span>
+          <button
+            onClick={() => { void refetch(); }}
+            title="Refresh feed"
+            className="text-gray-300 hover:text-gray-500 transition-colors"
+          >
+            <Radio className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Post card */}
+      <div className="flex-1 flex flex-col">
+        {posts.length === 0 ? (
+          <div className="flex-1 flex items-center justify-center text-xs text-gray-400">
+            Waiting for classified posts…
+          </div>
+        ) : post ? (
+          <div
+            className="flex-1 flex flex-col transition-all duration-350 ease-in-out"
+            style={{ opacity: visible ? 1 : 0, transform: visible ? 'translateY(0)' : 'translateY(6px)' }}
+          >
+            {/* Platform + label row */}
+            <div className="flex items-center gap-2 mb-2.5">
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${platformCls}`}>
+                {PLATFORM_LABELS[post.platform as PostPlatform] ?? post.platform}
+              </span>
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${meta.bg} ${meta.text} flex items-center gap-1`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
+                {label.charAt(0).toUpperCase() + label.slice(1)}
+              </span>
+              <span className={`ml-auto text-[11px] font-bold tabular-nums ${
+                conf >= 0.85 ? 'text-red-600' : conf >= 0.70 ? 'text-amber-600' : 'text-gray-500'
+              }`}>
+                {(conf * 100).toFixed(0)}%
+              </span>
+            </div>
+
+            {/* Post content */}
+            <blockquote className={`flex-1 rounded-xl px-3.5 py-3 text-xs text-gray-800 leading-relaxed line-clamp-4 ${meta.bg} border border-opacity-30`}
+              style={{ borderColor: 'currentColor' }}>
+              &ldquo;{post.content}&rdquo;
+            </blockquote>
+
+            {/* Meta row */}
+            <div className="flex items-center justify-between mt-2.5 text-[10px] text-gray-400">
+              <span>
+                {LANG_LABELS[post.language as PostLanguage] ?? post.language}
+              </span>
+              <span>{formatRelative(post.ingestedAt ?? post.createdAt)}</span>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      {/* Progress bar */}
+      <div className="mt-3 h-0.5 rounded-full bg-gray-100 overflow-hidden">
+        <div
+          className="h-full rounded-full bg-emerald-400 transition-none"
+          style={{ width: posts.length > 1 ? `${progress}%` : '0%' }}
+        />
+      </div>
+
+      {/* Dot indicators */}
+      {posts.length > 1 && (
+        <div className="flex justify-center gap-1 mt-2">
+          {Array.from({ length: Math.min(posts.length, 8) }).map((_, i) => (
+            <button
+              key={i}
+              onClick={() => { setIdx(i); setVisible(true); setProgress(0); }}
+              className={`h-1 rounded-full transition-all duration-200 ${
+                i === idx % 8 ? 'w-3 bg-emerald-500' : 'w-1 bg-gray-200'
+              }`}
+            />
+          ))}
+          {posts.length > 8 && (
+            <span className="text-[8px] text-gray-300 self-center ml-1">+{posts.length - 8}</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── Analyst view ──────────────────────────────────────────────────────────────
 
@@ -464,33 +642,39 @@ function SuperAdminView() {
         <StatCard label="Active reviewers"    value={(teamStats?.topReviewers?.length ?? 0).toString()}     icon={Users}       color="indigo"  />
       </div>
 
-      {/* 7-day classification breakdown — full width stacked bar */}
-      <div className="glass-card p-4">
-        <h2 className="text-sm font-semibold text-gray-800 mb-3">7-day classification breakdown</h2>
-        {typedDaily.length ? (
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={typedDaily} margin={{ top: 4, right: 16, bottom: 0, left: 0 }} barCategoryGap="30%">
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-              <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} width={42} tickLine={false} axisLine={false}
-                tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
-              <Tooltip
-                contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #f0f0f0' }}
-                formatter={(v: unknown, name: unknown) => [
-                  typeof v === 'number' ? v.toLocaleString() : String(v),
-                  String(name).charAt(0).toUpperCase() + String(name).slice(1),
-                ] as [string, string]}
-              />
-              <Legend iconSize={8} iconType="square" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-              <Bar dataKey="misinformation" stackId="a" fill="#E24B4A" name="Misinformation" />
-              <Bar dataKey="disinformation" stackId="a" fill="#D4537E" name="Disinformation" />
-              <Bar dataKey="irrelevant"     stackId="a" fill="#9ca3af" name="Irrelevant"     />
-              <Bar dataKey="factual"        stackId="a" fill="#1D9E75" name="Factual"         radius={[3, 3, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        ) : (
-          <EmptyState title="No classification data yet" />
-        )}
+      {/* 7-day classification breakdown + Live post ticker */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Chart — takes 2/3 width on large screens */}
+        <div className="glass-card p-4 lg:col-span-2">
+          <h2 className="text-sm font-semibold text-gray-800 mb-3">7-day classification breakdown</h2>
+          {typedDaily.length ? (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={typedDaily} margin={{ top: 4, right: 16, bottom: 0, left: 0 }} barCategoryGap="30%">
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} width={42} tickLine={false} axisLine={false}
+                  tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+                <Tooltip
+                  contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #f0f0f0' }}
+                  formatter={(v: unknown, name: unknown) => [
+                    typeof v === 'number' ? v.toLocaleString() : String(v),
+                    String(name).charAt(0).toUpperCase() + String(name).slice(1),
+                  ] as [string, string]}
+                />
+                <Legend iconSize={8} iconType="square" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                <Bar dataKey="misinformation" stackId="a" fill="#E24B4A" name="Misinformation" />
+                <Bar dataKey="disinformation" stackId="a" fill="#D4537E" name="Disinformation" />
+                <Bar dataKey="irrelevant"     stackId="a" fill="#9ca3af" name="Irrelevant"     />
+                <Bar dataKey="factual"        stackId="a" fill="#1D9E75" name="Factual"         radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyState title="No classification data yet" />
+          )}
+        </div>
+
+        {/* Live post ticker — takes 1/3 width */}
+        <LivePostTicker />
       </div>
 
       {/* Top narratives + platform/language */}
