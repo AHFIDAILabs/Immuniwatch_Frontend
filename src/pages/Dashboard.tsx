@@ -54,7 +54,6 @@ const LANG_ORDER: PostLanguage[] = ['en', 'pcm', 'ha', 'yo', 'ig'];
 
 const LABEL_TICKER: Record<string, { bg: string; text: string; dot: string }> = {
   misinformation: { bg: 'bg-red-50',     text: 'text-red-700',     dot: 'bg-red-500'     },
-  disinformation: { bg: 'bg-pink-50',    text: 'text-pink-700',    dot: 'bg-pink-500'    },
   factual:        { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
   irrelevant:     { bg: 'bg-gray-50',    text: 'text-gray-600',    dot: 'bg-gray-400'    },
 };
@@ -252,7 +251,7 @@ function AnalystView() {
   const totalToday = breakdown?.reduce((s: number, b: { count: number }) => s + b.count, 0) ?? 0;
   const flaggedToday = breakdown
     ? breakdown
-        .filter((b: { label: string }) => b.label === 'misinformation' || b.label === 'disinformation')
+        .filter((b: { label: string }) => b.label === 'misinformation')
         .reduce((s: number, b: { count: number }) => s + b.count, 0)
     : 0;
   const highAlerts = (alertsData?.data ?? []).filter((a: Alert) => a.severity === 'high');
@@ -538,7 +537,7 @@ function SupervisorView() {
 
 type DailyEntry = {
   day: string; date: string;
-  misinformation: number; disinformation: number; factual: number; irrelevant: number;
+  misinformation: number; factual: number; irrelevant: number;
 };
 
 function SuperAdminView() {
@@ -594,9 +593,9 @@ function SuperAdminView() {
   const typedDaily = (dailyBreakdown ?? []) as DailyEntry[];
   const today       = typedDaily[typedDaily.length - 1];
   const todayTotal  = today
-    ? today.misinformation + today.disinformation + today.factual + today.irrelevant
+    ? today.misinformation + today.factual + today.irrelevant
     : 0;
-  const flaggedCount = typedDaily.reduce((s, d) => s + d.misinformation + d.disinformation, 0);
+  const flaggedCount = typedDaily.reduce((s, d) => s + d.misinformation, 0);
 
   const recentAlerts: Alert[] = alertsData?.data ?? [];
 
@@ -663,7 +662,6 @@ function SuperAdminView() {
                 />
                 <Legend iconSize={8} iconType="square" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
                 <Bar dataKey="misinformation" stackId="a" fill="#E24B4A" name="Misinformation" />
-                <Bar dataKey="disinformation" stackId="a" fill="#D4537E" name="Disinformation" />
                 <Bar dataKey="irrelevant"     stackId="a" fill="#9ca3af" name="Irrelevant"     />
                 <Bar dataKey="factual"        stackId="a" fill="#1D9E75" name="Factual"         radius={[3, 3, 0, 0]} />
               </BarChart>

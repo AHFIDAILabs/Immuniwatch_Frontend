@@ -16,7 +16,6 @@ export type PostPlatform = "twitter" | "facebook" | "youtube" | "bluesky" | "sub
 export type PostLanguage = "en" | "pcm" | "ha" | "yo" | "ig";
 export type ClassificationLabel =
   | "misinformation"
-  | "disinformation"
   | "factual"
   | "irrelevant"
   | "pending";
@@ -283,7 +282,6 @@ export interface DailyBreakdownItem {
   date: string;
   day: string;
   misinformation: number;
-  disinformation: number;
   factual: number;
   irrelevant: number;
 }

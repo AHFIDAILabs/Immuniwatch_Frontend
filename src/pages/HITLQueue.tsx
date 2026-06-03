@@ -560,7 +560,7 @@ export default function HITLQueue() {
                   )}
 
                   {/* Similar-post context strip */}
-                  {postId && (cls?.label === 'misinformation' || cls?.label === 'disinformation') && (
+                  {postId && (cls?.label === 'misinformation') && (
                     <ContextStrip postId={postId} />
                   )}
 
@@ -570,7 +570,7 @@ export default function HITLQueue() {
                       <span className="font-semibold text-emerald-700 flex-shrink-0">KB</span>
                       <span className="text-gray-700">{kbEvidence[0].summary ?? kbEvidence[0].title}</span>
                     </div>
-                  ) : cls && (cls.label === 'misinformation' || cls.label === 'disinformation') ? (
+                  ) : cls && (cls.label === 'misinformation') ? (
                     <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2.5 mb-3 text-xs flex gap-2">
                       <span className="font-semibold text-emerald-700 flex-shrink-0">KB</span>
                       <span className="text-gray-500">No knowledge base evidence found — enrich the KB to improve auto-responses.</span>

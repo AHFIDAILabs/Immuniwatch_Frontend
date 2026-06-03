@@ -47,7 +47,7 @@ export default function TrendAnalysis() {
   const totalPosts = breakdown?.reduce((s: number, b: { count: number }) => s + b.count, 0) ?? 0;
   const flagged = breakdown
     ? breakdown
-        .filter((b: { label: string }) => b.label === 'misinformation' || b.label === 'disinformation')
+        .filter((b: { label: string }) => b.label === 'misinformation')
         .reduce((s: number, b: { count: number }) => s + b.count, 0)
     : 0;
   const flagRate = totalPosts > 0 ? ((flagged / totalPosts) * 100).toFixed(1) : '0.0';

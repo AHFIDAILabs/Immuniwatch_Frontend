@@ -86,7 +86,7 @@ export default function ResponseDispatch() {
           <h2 className="text-xs font-semibold text-gray-700 mb-3">Dispatch pipeline</h2>
           <div className="space-y-3">
             {[
-              { step: '1', title: 'Classification', desc: 'ML model labels post as misinformation or disinformation' },
+              { step: '1', title: 'Classification', desc: 'ML model labels post as misinformation, factual, or irrelevant' },
               { step: '2', title: 'HITL Review',    desc: 'Analyst approves, overrides, or rejects the flagged post' },
               { step: '3', title: 'Response gen.',  desc: 'Counter-narrative drafted using Knowledge Base context' },
               { step: '4', title: 'Platform push',  desc: 'Response dispatched via platform API or webhook' },

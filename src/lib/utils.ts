@@ -33,7 +33,6 @@ export function formatPct(n: number): string {
 
 export const LABEL_META: Record<ClassificationLabel, { label: string; color: string }> = {
   misinformation: { label: 'Misinformation', color: 'bg-red-100 text-red-700 border border-red-200' },
-  disinformation: { label: 'Disinformation', color: 'bg-orange-100 text-orange-700 border border-orange-200' },
   factual:        { label: 'Factual',         color: 'bg-green-100 text-green-700 border border-green-200' },
   irrelevant:     { label: 'Irrelevant',      color: 'bg-slate-100 text-slate-500 border border-slate-200' },
   pending:        { label: 'Pending',          color: 'bg-yellow-100 text-yellow-700 border border-yellow-200' },

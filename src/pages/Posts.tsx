@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, Loader2, CheckCircle, Clock, ShieldAlert, Archive, Eye } from 'lucide-react';
+import { Search, Loader2, CheckCircle, Clock, ShieldAlert, Eye } from 'lucide-react';
 import { postsApi } from '../api/posts';
 import { hitlApi }  from '../api/hitl';
 import { LabelBadge } from '../components/Badge';
@@ -15,7 +15,6 @@ const PAGE_SIZE = 20;
 
 const CONF_COLOR: Record<string, string> = {
   misinformation: 'bg-red-500',
-  disinformation: 'bg-pink-500',
   factual:        'bg-emerald-500',
   irrelevant:     'bg-gray-400',
   pending:        'bg-blue-400',
@@ -23,37 +22,31 @@ const CONF_COLOR: Record<string, string> = {
 
 // ── Action semantics ──────────────────────────────────────────────────────────
 //
-// Queue     — misinfo/disinfo, conf < 0.85 → HITL standard priority
-// Escalate  — misinfo/disinfo, conf ≥ 0.85 → HITL HIGH priority
-// Review    — irrelevant → HITL standard priority (confirm or re-label)
-// Archive   — factual → mark as archived (no HITL needed)
+// Queue     — misinformation, conf < 0.85 → HITL standard priority
+// Escalate  — misinformation, conf ≥ 0.85 → HITL HIGH priority (urgent)
+// Review    — factual OR irrelevant → HITL standard priority
+//             Factual posts go to Review because the model may have mislabelled them —
+//             analysts confirm the label before the post is dismissed.
 //
 // All authenticated roles may trigger any action.
 // The HITL queue page controls who can approve / reject / override.
 
-type ActionType = 'queue' | 'escalate' | 'review' | 'archive';
+type ActionType = 'queue' | 'escalate' | 'review';
 
 function resolveAction(post: Post): ActionType | null {
   const label = post.classification?.label;
   const conf  = post.classification?.confidence ?? 0;
   if (!label || label === 'pending') return null;
-  if (label === 'misinformation' || label === 'disinformation')
+  if (label === 'misinformation')
     return conf >= 0.85 ? 'escalate' : 'queue';
-  if (label === 'factual')   return 'archive';
-  if (label === 'irrelevant') return 'review';
+  // Both factual and irrelevant go to HITL for human confirmation
+  if (label === 'factual' || label === 'irrelevant') return 'review';
   return null;
 }
 
 // ── Status badge (shown when post is already actioned) ───────────────────────
 
 function StatusBadge({ post }: { post: Post }) {
-  if (post.archivedAt) {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-500">
-        <Archive className="h-3 w-3" /> Archived
-      </span>
-    );
-  }
   const h = post.hitlReview;
   if (!h) return null;
   const MAP: Record<string, { label: string; cls: string; Icon: typeof CheckCircle }> = {
@@ -95,26 +88,17 @@ function ActionButton({ post }: { post: Post }) {
     onError: () => toast.error('Action failed', 'Could not add post to the review queue. Please try again.'),
   });
 
-  const { mutate: doArchive, isPending: archiving } = useMutation({
-    mutationFn: () => postsApi.archive(post._id),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['posts'] });
-      toast.success('Post archived', 'Confirmed factual — no further action needed.');
-    },
-    onError: () => toast.error('Archive failed', 'Could not archive this post. Please try again.'),
-  });
-
   // Already actioned — show badge instead of button
-  if (post.archivedAt || post.hitlReview) {
+  if (post.hitlReview) {
     return <StatusBadge post={post} />;
   }
 
   const action = resolveAction(post);
   if (!action) return null;
 
-  const isPending = queuing || archiving;
+  const isPending = queuing;
 
-  const CONFIGS = {
+  const CONFIGS: Record<'queue' | 'escalate' | 'review', { label: string; cls: string; onClick: () => void }> = {
     escalate: {
       label: 'Escalate',
       cls:   'border-red-400 text-red-600 hover:bg-red-50',
@@ -129,11 +113,6 @@ function ActionButton({ post }: { post: Post }) {
       label: 'Review',
       cls:   'border-amber-400 text-amber-700 hover:bg-amber-50',
       onClick: () => doQueue('standard'),
-    },
-    archive: {
-      label: 'Archive',
-      cls:   'border-gray-300 text-gray-500 hover:bg-gray-50',
-      onClick: () => doArchive(),
     },
   };
 
