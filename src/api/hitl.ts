@@ -2,7 +2,14 @@ import { api } from './client';
 import type { Paginated, HITLReview, HITLPriority, HITLStatus, ClassificationLabel, HITLMyStats, HITLTeamStats } from '../types/api';
 
 export const hitlApi = {
-  list: (params: { page?: number; limit?: number; priority?: HITLPriority; status?: HITLStatus }) =>
+  list: (params: {
+    page?:      number;
+    limit?:     number;
+    priority?:  HITLPriority;
+    status?:    HITLStatus;
+    sortBy?:    string;
+    sortOrder?: 'asc' | 'desc';
+  }) =>
     api.get<Paginated<HITLReview>>('/hitl', { params }).then((r) => r.data),
 
   approve: (id: string) =>
