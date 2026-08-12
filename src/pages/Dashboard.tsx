@@ -1,32 +1,33 @@
-﻿import { useQuery } from '@tanstack/react-query';
-import { useState, useEffect, useRef } from 'react';
-import { Radio } from 'lucide-react';
+import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect, useRef } from "react";
 import {
-  FileText, AlertTriangle, Clock, Send,
-  CheckSquare, BarChart2, Users, ShieldAlert,
-} from 'lucide-react';
-import { StatCard } from '../components/StatCard';
-import { SeverityBadge } from '../components/Badge';
-import { LabelBadge } from '../components/Badge';
-import { FullPageSpinner } from '../components/Spinner';
-import { EmptyState } from '../components/EmptyState';
-import { FallbackModeAlert } from '../components/FallbackModeAlert';
-import { RetrainingProgressBanner } from '../components/RetrainingProgressBanner';
-import { ErrorBanner } from '../components/ErrorBanner';
-import { trendsApi } from '../api/trends';
-import { postsApi }  from '../api/posts';
-import { alertsApi } from '../api/alerts';
-import { modelHealthApi } from '../api/modelHealth';
-import { hitlApi } from '../api/hitl';
-import { dispatchApi } from '../api/dispatch';
-import { useAuth } from '../context/AuthContext';
-import { formatRelative, LANG_LABELS, PLATFORM_LABELS } from '../lib/utils';
+  Radio, FileText, AlertTriangle, Clock, Send,
+  CheckSquare, BarChart2, Users, ShieldAlert, RefreshCw,
+  TrendingUp, Activity, Zap,
+} from "lucide-react";
+import { StatCard } from "../components/StatCard";
+import { SeverityBadge } from "../components/Badge";
+import { LabelBadge } from "../components/Badge";
+import { FullPageSpinner } from "../components/Spinner";
+import { EmptyState } from "../components/EmptyState";
+import { FallbackModeAlert } from "../components/FallbackModeAlert";
+import { RetrainingProgressBanner } from "../components/RetrainingProgressBanner";
+import { ErrorBanner } from "../components/ErrorBanner";
+import { trendsApi } from "../api/trends";
+import { postsApi } from "../api/posts";
+import { alertsApi } from "../api/alerts";
+import { modelHealthApi } from "../api/modelHealth";
+import { hitlApi } from "../api/hitl";
+import { dispatchApi } from "../api/dispatch";
+import { useAuth } from "../context/AuthContext";
+import { formatRelative, LANG_LABELS, PLATFORM_LABELS } from "../lib/utils";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-} from 'recharts';
-import type { Alert, Post, PostLanguage, PostPlatform } from '../types/api';
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Legend,
+} from "recharts";
+import type { Alert, Post, PostLanguage, PostPlatform } from "../types/api";
 
-// ── Mini sparkbar used in the narratives table ────────────────────────────────
+// ── Mini sparkbar ─────────────────────────────────────────────────────────────
 function SparkBar({ data }: { data: number[] }) {
   const max = Math.max(...data, 1);
   const W = 5, G = 2, H = 20;
@@ -38,9 +39,11 @@ function SparkBar({ data }: { data: number[] }) {
         return (
           <rect
             key={i}
-            x={i * (W + G)} y={H - bh}
-            width={W} height={bh}
-            fill={v === max && max > 0 ? '#059669' : '#d1fae5'}
+            x={i * (W + G)}
+            y={H - bh}
+            width={W}
+            height={bh}
+            fill={v === max && max > 0 ? "#00897b" : "rgba(0,137,123,0.22)"}
             rx={1}
           />
         );
@@ -48,62 +51,109 @@ function SparkBar({ data }: { data: number[] }) {
     </svg>
   );
 }
-const LANG_ORDER: PostLanguage[] = ['en', 'pcm', 'ha', 'yo', 'ig'];
 
-// ── Label colours for the ticker ─────────────────────────────────────────────
+const LANG_ORDER: PostLanguage[] = ["en", "pcm", "ha", "yo", "ig"];
 
-const LABEL_TICKER: Record<string, { bg: string; text: string; dot: string }> = {
-  misinformation: { bg: 'bg-red-50',     text: 'text-red-700',     dot: 'bg-red-500'     },
-  factual:        { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
-  irrelevant:     { bg: 'bg-gray-50',    text: 'text-gray-600',    dot: 'bg-gray-400'    },
+// ── Label colours for the live feed ──────────────────────────────────────────
+const LABEL_TICKER: Record<string, { bg: string; border: string; text: string; dot: string }> = {
+  misinformation: { bg: "rgba(192,57,43,0.06)", border: "rgba(192,57,43,0.18)", text: "#b03325", dot: "#c0392b" },
+  factual:        { bg: "rgba(0,137,123,0.06)", border: "rgba(0,137,123,0.18)", text: "#005048", dot: "#00897b"  },
+  irrelevant:     { bg: "rgba(74,96,96,0.05)",  border: "rgba(74,96,96,0.15)",  text: "#4a6060", dot: "#8da8a8"  },
 };
 
-const PLATFORM_COLORS: Record<string, string> = {
-  bluesky:    'bg-sky-100    text-sky-700',
-  youtube:    'bg-red-100    text-red-700',
-  twitter:    'bg-blue-100   text-blue-700',
-  facebook:   'bg-indigo-100 text-indigo-700',
-  submission: 'bg-gray-100   text-gray-600',
+const PLATFORM_CHIP: Record<string, { bg: string; color: string }> = {
+  bluesky:    { bg: "rgba(91,164,207,0.12)",  color: "#1a6fa0" },
+  youtube:    { bg: "rgba(192,57,43,0.10)",   color: "#b03325" },
+  twitter:    { bg: "rgba(37,99,235,0.10)",   color: "#1e40af" },
+  facebook:   { bg: "rgba(0,137,123,0.10)",   color: "#005048" },
+  submission: { bg: "rgba(74,96,96,0.08)",    color: "#4a6060" },
 };
 
-// ── Live Post Ticker ──────────────────────────────────────────────────────────
+// ── Panel header helper ───────────────────────────────────────────────────────
+function PanelHeader({
+  title, badge, dot, action,
+}: {
+  title: string;
+  badge?: string | number;
+  dot?: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center gap-2">
+        {dot && (
+          <span
+            className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+            style={{ background: dot }}
+          />
+        )}
+        <h2 className="label-caps text-[#4a6060]">{title}</h2>
+        {badge !== undefined && (
+          <span
+            className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+            style={{ background: "rgba(0,137,123,0.12)", color: "#00897b" }}
+          >
+            {badge}
+          </span>
+        )}
+      </div>
+      {action && <div className="flex items-center">{action}</div>}
+    </div>
+  );
+}
 
-const CYCLE_MS = 5000;  // milliseconds per post
+// ── Alert row (uses severity-* CSS classes) ───────────────────────────────────
+function AlertRow({ alert }: { alert: Alert }) {
+  return (
+    <div className={`severity-${alert.severity} flex items-start gap-3 p-3 rounded-xl text-xs`}>
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold leading-snug" style={{ color: "#0f2626" }}>
+          {alert.title}
+        </p>
+        <p className="mt-0.5 truncate" style={{ color: "#4a6060" }}>
+          {alert.message}
+        </p>
+      </div>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <SeverityBadge severity={alert.severity} />
+        <span className="tabular-nums" style={{ color: "#8da8a8" }}>
+          {formatRelative(alert.createdAt)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ── Live Classification Feed ──────────────────────────────────────────────────
+const CYCLE_MS = 5000;
 
 function LivePostTicker() {
   const { data, refetch } = useQuery({
-    queryKey:        ['posts', 'ticker'],
-    queryFn:         () => postsApi.list({ limit: 60, labeled: true }),
-    refetchInterval: 60_000,   // pull fresh posts every minute
-    staleTime:       30_000,
+    queryKey: ["posts", "ticker"],
+    queryFn: () => postsApi.list({ limit: 60, labeled: true }),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
   });
 
-  // Only show classified, non-pending posts
   const posts: Post[] = (data?.data ?? []).filter(
-    (p) => p.classification?.label && p.classification.label !== 'pending',
+    (p) => p.classification?.label && p.classification.label !== "pending",
   );
 
-  const [idx,     setIdx]     = useState(0);
+  const [idx, setIdx] = useState(0);
   const [visible, setVisible] = useState(true);
   const [progress, setProgress] = useState(0);
-  const intervalRef   = useRef<ReturnType<typeof setInterval> | null>(null);
-  const progressRef   = useRef<ReturnType<typeof setInterval> | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const progressRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Reset to 0 when posts list changes
   useEffect(() => { setIdx(0); }, [posts.length]);
 
-  // Auto-cycle with fade + progress bar
   useEffect(() => {
     if (posts.length <= 1) return;
-
-    // Progress bar ticks every 50 ms
     setProgress(0);
     progressRef.current = setInterval(() => {
       setProgress((p) => Math.min(100, p + (50 / CYCLE_MS) * 100));
     }, 50);
-
     intervalRef.current = setInterval(() => {
-      // Fade out
       setVisible(false);
       setTimeout(() => {
         setIdx((i) => (i + 1) % posts.length);
@@ -111,95 +161,109 @@ function LivePostTicker() {
         setVisible(true);
       }, 350);
     }, CYCLE_MS);
-
     return () => {
-      if (intervalRef.current)  clearInterval(intervalRef.current);
-      if (progressRef.current)  clearInterval(progressRef.current);
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (progressRef.current) clearInterval(progressRef.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [posts.length]);
 
   const post = posts[idx];
   const cls  = post?.classification;
-  const label = cls?.label ?? 'pending';
+  const label = cls?.label ?? "pending";
   const conf  = cls?.confidence ?? 0;
   const meta  = LABEL_TICKER[label] ?? LABEL_TICKER.irrelevant;
-  const platformCls = PLATFORM_COLORS[post?.platform ?? ''] ?? PLATFORM_COLORS.submission;
+  const platChip = PLATFORM_CHIP[post?.platform ?? ""] ?? PLATFORM_CHIP.submission;
 
   return (
-    <div className="glass-card p-4 flex flex-col h-full min-h-[280px]">
+    <div className="glass-card p-5 flex flex-col h-full min-h-[300px]">
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-          </span>
-          <h2 className="text-xs font-semibold text-gray-700">Live Classification Feed</h2>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-gray-400 tabular-nums">
-            {posts.length > 0 ? `${idx + 1} / ${posts.length}` : '—'}
-          </span>
+      <PanelHeader
+        title="Live Classification Feed"
+        dot="#00897b"
+        badge={posts.length > 0 ? `${idx + 1}/${posts.length}` : undefined}
+        action={
           <button
             onClick={() => { void refetch(); }}
             title="Refresh feed"
-            className="text-gray-300 hover:text-gray-500 transition-colors"
+            className="p-1.5 rounded-lg transition-colors"
+            style={{ color: "#8da8a8" }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#00897b"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "#8da8a8"; }}
           >
-            <Radio className="h-3.5 w-3.5" />
+            <RefreshCw className="h-3.5 w-3.5" />
           </button>
-        </div>
+        }
+      />
+
+      {/* Live pulse */}
+      <div className="flex items-center gap-1.5 mb-3">
+        <span className="relative flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60" style={{ background: "#00897b" }} />
+          <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: "#00897b" }} />
+        </span>
+        <span className="text-[10px] font-semibold" style={{ color: "#00897b", fontFamily: '"Plus Jakarta Sans", sans-serif', letterSpacing: "0.05em" }}>
+          LIVE
+        </span>
       </div>
 
       {/* Post card */}
       <div className="flex-1 flex flex-col">
         {posts.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center text-xs text-gray-400">
-            Waiting for classified posts…
+          <div className="flex-1 flex items-center justify-center">
+            <EmptyState title="Waiting for classified posts…" />
           </div>
         ) : post ? (
           <div
-            className="flex-1 flex flex-col transition-all duration-350 ease-in-out"
-            style={{ opacity: visible ? 1 : 0, transform: visible ? 'translateY(0)' : 'translateY(6px)' }}
+            className="flex-1 flex flex-col transition-all duration-300 ease-in-out"
+            style={{ opacity: visible ? 1 : 0, transform: visible ? "translateY(0)" : "translateY(6px)" }}
           >
             {/* Platform + label row */}
-            <div className="flex items-center gap-2 mb-2.5">
-              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${platformCls}`}>
+            <div className="flex items-center gap-2 mb-3">
+              <span
+                className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                style={{ background: platChip.bg, color: platChip.color }}
+              >
                 {PLATFORM_LABELS[post.platform as PostPlatform] ?? post.platform}
               </span>
-              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${meta.bg} ${meta.text} flex items-center gap-1`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
+              <span
+                className="text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1"
+                style={{ background: meta.bg, color: meta.text, border: `1px solid ${meta.border}` }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: meta.dot }} />
                 {label.charAt(0).toUpperCase() + label.slice(1)}
               </span>
-              <span className={`ml-auto text-[11px] font-bold tabular-nums ${
-                conf >= 0.85 ? 'text-red-600' : conf >= 0.70 ? 'text-amber-600' : 'text-gray-500'
-              }`}>
+              <span
+                className={`ml-auto text-[11px] font-bold tabular-nums ${
+                  conf >= 0.85 ? "text-[#c0392b]" : conf >= 0.7 ? "text-[#d97706]" : "text-[#4a6060]"
+                }`}
+              >
                 {(conf * 100).toFixed(0)}%
               </span>
             </div>
 
-            {/* Post content */}
-            <blockquote className={`flex-1 rounded-xl px-3.5 py-3 text-xs text-gray-800 leading-relaxed line-clamp-4 ${meta.bg} border border-opacity-30`}
-              style={{ borderColor: 'currentColor' }}>
+            {/* Content */}
+            <blockquote
+              className="flex-1 rounded-xl px-4 py-3 text-xs leading-relaxed line-clamp-4"
+              style={{ background: meta.bg, border: `1px solid ${meta.border}`, color: "#0f2626" }}
+            >
               &ldquo;{post.content}&rdquo;
             </blockquote>
 
-            {/* Meta row */}
-            <div className="flex items-center justify-between mt-2.5 text-[10px] text-gray-400">
-              <span>
-                {LANG_LABELS[post.language as PostLanguage] ?? post.language}
-              </span>
-              <span>{formatRelative(post.ingestedAt ?? post.createdAt)}</span>
+            {/* Meta */}
+            <div className="flex items-center justify-between mt-2.5 text-[10px]" style={{ color: "#8da8a8" }}>
+              <span>{LANG_LABELS[post.language as PostLanguage] ?? post.language}</span>
+              <span className="tabular-nums">{formatRelative(post.ingestedAt ?? post.createdAt)}</span>
             </div>
           </div>
         ) : null}
       </div>
 
       {/* Progress bar */}
-      <div className="mt-3 h-0.5 rounded-full bg-gray-100 overflow-hidden">
+      <div className="mt-4 h-0.5 rounded-full overflow-hidden" style={{ background: "rgba(0,137,123,0.12)" }}>
         <div
-          className="h-full rounded-full bg-emerald-400 transition-none"
-          style={{ width: posts.length > 1 ? `${progress}%` : '0%' }}
+          className="h-full rounded-full transition-none"
+          style={{ width: posts.length > 1 ? `${progress}%` : "0%", background: "#00897b" }}
         />
       </div>
 
@@ -210,13 +274,17 @@ function LivePostTicker() {
             <button
               key={i}
               onClick={() => { setIdx(i); setVisible(true); setProgress(0); }}
-              className={`h-1 rounded-full transition-all duration-200 ${
-                i === idx % 8 ? 'w-3 bg-emerald-500' : 'w-1 bg-gray-200'
-              }`}
+              className="h-1 rounded-full transition-all duration-200"
+              style={{
+                width: i === idx % 8 ? "12px" : "4px",
+                background: i === idx % 8 ? "#00897b" : "rgba(0,137,123,0.18)",
+              }}
             />
           ))}
           {posts.length > 8 && (
-            <span className="text-[8px] text-gray-300 self-center ml-1">+{posts.length - 8}</span>
+            <span className="text-[8px] self-center ml-1" style={{ color: "#8da8a8" }}>
+              +{posts.length - 8}
+            </span>
           )}
         </div>
       )}
@@ -224,216 +292,245 @@ function LivePostTicker() {
   );
 }
 
-// ── Analyst view ──────────────────────────────────────────────────────────────
+// ── Narratives table (shared) ─────────────────────────────────────────────────
+function NarrativesPanel({ showTrend = false }: { showTrend?: boolean }) {
+  const { data: narratives } = useQuery({
+    queryKey: ["trends", "top-narratives"],
+    queryFn: () => trendsApi.topNarratives(7, 5),
+  });
 
+  return (
+    <div className="glass-card p-5">
+      <PanelHeader title="Narrative Clusters — 7 days" dot="#B08BBF" />
+      {narratives?.length ? (
+        <div className="overflow-x-auto">
+          <table className="data-table w-full">
+            <thead>
+              <tr>
+                <th className="w-6">#</th>
+                <th>Claim Cluster</th>
+                <th className="text-right w-14">Posts</th>
+                {showTrend && <th className="text-right w-16">Trend</th>}
+                <th className="text-right w-20">Label</th>
+              </tr>
+            </thead>
+            <tbody>
+              {narratives.map(
+                (n: { narrative: string; count: number; label: string; trend?: number[] }, i: number) => (
+                  <tr key={n.narrative}>
+                    <td className="font-bold" style={{ color: "#8da8a8" }}>{i + 1}</td>
+                    <td>
+                      <p className="line-clamp-1 leading-snug" style={{ color: "#0f2626" }}>
+                        {n.narrative}
+                      </p>
+                    </td>
+                    <td className="text-right num-display text-sm font-semibold" style={{ color: "#0f2626" }}>
+                      {n.count.toLocaleString()}
+                    </td>
+                    {showTrend && (
+                      <td className="text-right">
+                        <SparkBar data={n.trend ?? Array(7).fill(0)} />
+                      </td>
+                    )}
+                    <td className="text-right">
+                      <LabelBadge label={n.label as never} />
+                    </td>
+                  </tr>
+                ),
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <EmptyState title="No narratives yet" />
+      )}
+    </div>
+  );
+}
+
+// ── Analyst view ──────────────────────────────────────────────────────────────
 function AnalystView() {
   const { data: breakdown, isLoading } = useQuery({
-    queryKey: ['trends', 'classification-breakdown'],
+    queryKey: ["trends", "classification-breakdown"],
     queryFn: () => trendsApi.classificationBreakdown(1),
   });
-
   const { data: hitlPending } = useQuery({
-    queryKey: ['hitl', 'pending-count'],
-    queryFn: () => hitlApi.list({ page: 1, limit: 1, status: 'pending' }),
+    queryKey: ["hitl", "pending-count"],
+    queryFn: () => hitlApi.list({ page: 1, limit: 1, status: "pending" }),
     staleTime: 30_000,
   });
-
   const { data: alertsData } = useQuery({
-    queryKey: ['alerts', { resolved: false, severity: 'high' }],
-    queryFn: () => alertsApi.list({ resolved: false, limit: 3 }),
-  });
-
-  const { data: narratives } = useQuery({
-    queryKey: ['trends', 'top-narratives'],
-    queryFn: () => trendsApi.topNarratives(7, 5),
+    queryKey: ["alerts", { resolved: false, severity: "high" }],
+    queryFn: () => alertsApi.list({ resolved: false, limit: 5 }),
   });
 
   const totalToday = breakdown?.reduce((s: number, b: { count: number }) => s + b.count, 0) ?? 0;
   const flaggedToday = breakdown
-    ? breakdown
-        .filter((b: { label: string }) => b.label === 'misinformation')
+    ? breakdown.filter((b: { label: string }) => b.label === "misinformation")
         .reduce((s: number, b: { count: number }) => s + b.count, 0)
     : 0;
-  const highAlerts = (alertsData?.data ?? []).filter((a: Alert) => a.severity === 'high');
+  const highAlerts = (alertsData?.data ?? []).filter((a: Alert) => a.severity === "high");
 
   if (isLoading) return <FullPageSpinner />;
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-        <StatCard label="Posts ingested today"   value={totalToday.toLocaleString()}              icon={FileText}     color="indigo" />
-        <StatCard label="Flagged today"          value={flaggedToday.toLocaleString()}            icon={AlertTriangle} color="red"   />
-        <StatCard label="Awaiting HITL review"  value={(hitlPending?.total ?? 0).toLocaleString()} icon={Clock}       color="yellow" />
+    <div className="space-y-5">
+      {/* KPI strip */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <StatCard
+          label="Posts Ingested Today"
+          value={totalToday.toLocaleString()}
+          icon={FileText}
+          color="teal"
+          sub="Across all platforms"
+        />
+        <StatCard
+          label="Flagged Today"
+          value={flaggedToday.toLocaleString()}
+          icon={AlertTriangle}
+          color="peach"
+          sub="Misinformation detections"
+        />
+        <StatCard
+          label="Awaiting HITL Review"
+          value={(hitlPending?.total ?? 0).toLocaleString()}
+          icon={Clock}
+          color="ocean"
+          sub="Pending analyst decisions"
+        />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* High-severity alerts */}
-        <div className="glass-card p-4">
-          <h2 className="text-xs font-semibold text-gray-700 mb-3">High-severity alerts</h2>
+      {/* Main content grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* Surveillance focus — high severity alerts */}
+        <div className="glass-card p-5 lg:col-span-2">
+          <PanelHeader title="Surveillance Focus — High Severity" dot="#c0392b" badge={highAlerts.length || "—"} />
           {highAlerts.length ? (
             <div className="space-y-2">
               {highAlerts.map((alert: Alert) => (
-                <div key={alert._id} className="flex items-start gap-2.5 p-2.5 rounded-lg border bg-red-50 border-red-200 text-xs">
-                  <span className="w-1.5 h-1.5 rounded-full mt-1 flex-shrink-0 bg-red-500" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-gray-800 leading-snug">{alert.title}</p>
-                    <p className="text-gray-500 mt-0.5 truncate">{alert.message}</p>
-                  </div>
-                  <span className="text-gray-400 whitespace-nowrap flex-shrink-0">{formatRelative(alert.createdAt)}</span>
-                </div>
+                <AlertRow key={alert._id} alert={alert} />
               ))}
             </div>
           ) : (
-            <EmptyState title="No high-severity alerts" description="All clear." />
+            <EmptyState title="No high-severity alerts" description="All surveillance channels clear." />
           )}
         </div>
 
-        {/* Top narratives */}
-        <div className="glass-card p-4">
-          <h2 className="text-xs font-semibold text-gray-700 mb-3">Top narratives (7 days)</h2>
-          {narratives?.length ? (
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-gray-400 uppercase tracking-wide text-[10px]">
-                  <th className="text-left pb-2 w-6">#</th>
-                  <th className="text-left pb-2">Claim</th>
-                  <th className="text-right pb-2 w-12">Posts</th>
-                  <th className="text-right pb-2 w-16">Label</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {narratives.map((n: { narrative: string; count: number; label: string }, i: number) => (
-                  <tr key={n.narrative} className="hover:bg-gray-50">
-                    <td className="py-2 text-gray-400 font-bold">{i + 1}</td>
-                    <td className="py-2 text-gray-800 pr-2">
-                      <p className="line-clamp-2 leading-snug">{n.narrative}</p>
-                    </td>
-                    <td className="py-2 text-right font-medium text-gray-700">{n.count}</td>
-                    <td className="py-2 text-right"><LabelBadge label={n.label as never} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <EmptyState title="No narratives yet" />
-          )}
-        </div>
+        {/* Live feed */}
+        <LivePostTicker />
       </div>
+
+      {/* Narratives */}
+      <NarrativesPanel />
     </div>
   );
 }
 
 // ── Senior Analyst view ───────────────────────────────────────────────────────
-
 function SeniorAnalystView() {
   const { data: myStats, isLoading } = useQuery({
-    queryKey: ['hitl', 'my-stats'],
+    queryKey: ["hitl", "my-stats"],
     queryFn: () => hitlApi.myStats(),
     staleTime: 30_000,
   });
-
   const { data: dispatchStats } = useQuery({
-    queryKey: ['dispatch', 'stats'],
+    queryKey: ["dispatch", "stats"],
     queryFn: () => dispatchApi.getStats(),
     staleTime: 60_000,
   });
 
-  const { data: narratives } = useQuery({
-    queryKey: ['trends', 'top-narratives'],
-    queryFn: () => trendsApi.topNarratives(7, 5),
-  });
-
   if (isLoading) return <FullPageSpinner />;
 
-  const pendingHigh     = 0; // derived from myStats.pendingTotal — split not available at this level
-  const pendingStandard = myStats?.pendingTotal ?? 0;
-
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-        <StatCard label="My reviews today"     value={(myStats?.reviewedToday   ?? 0).toString()} icon={CheckSquare}  color="green"  />
-        <StatCard label="My reviews this week" value={(myStats?.reviewedThisWeek ?? 0).toString()} icon={BarChart2}   color="indigo" />
-        <StatCard label="My override rate"     value={`${myStats?.overrideRate ?? 0}%`}           icon={AlertTriangle} color="yellow" />
-        <StatCard label="Responses dispatched" value={(dispatchStats?.dispatchedToday ?? 0).toLocaleString()} icon={Send} color="emerald" />
+    <div className="space-y-5">
+      {/* KPI strip */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard
+          label="My Reviews Today"
+          value={(myStats?.reviewedToday ?? 0).toString()}
+          icon={CheckSquare}
+          color="teal"
+          sub="Completed decisions"
+        />
+        <StatCard
+          label="My Reviews This Week"
+          value={(myStats?.reviewedThisWeek ?? 0).toString()}
+          icon={BarChart2}
+          color="ocean"
+          sub="7-day total"
+        />
+        <StatCard
+          label="My Override Rate"
+          value={`${myStats?.overrideRate ?? 0}%`}
+          icon={AlertTriangle}
+          color="peach"
+          sub="Model disagreements"
+        />
+        <StatCard
+          label="Responses Dispatched"
+          value={(dispatchStats?.dispatchedToday ?? 0).toLocaleString()}
+          icon={Send}
+          color="mauve"
+          sub="Counter-narratives sent"
+        />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Queue priority breakdown */}
-        <div className="glass-card p-4">
-          <h2 className="text-xs font-semibold text-gray-700 mb-3">Queue — pending items</h2>
+      {/* Main grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* Queue breakdown */}
+        <div className="glass-card p-5">
+          <PanelHeader title="Queue Priority Breakdown" dot="#d97706" />
           <div className="space-y-3">
-            <div className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
-                <span className="text-gray-600">High priority</span>
+            <div className="flex items-center justify-between p-3 rounded-xl" style={{ background: "rgba(192,57,43,0.06)", border: "1px solid rgba(192,57,43,0.12)" }}>
+              <div className="flex items-center gap-2 text-xs">
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: "#c0392b" }} />
+                <span style={{ color: "#0f2626" }}>High priority</span>
               </div>
-              <span className="font-semibold text-gray-900">{pendingHigh}</span>
+              <span className="num-display text-sm font-bold" style={{ color: "#c0392b" }}>0</span>
             </div>
-            <div className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-gray-400 inline-block" />
-                <span className="text-gray-600">Standard priority</span>
+            <div className="flex items-center justify-between p-3 rounded-xl" style={{ background: "rgba(74,96,96,0.05)", border: "1px solid rgba(74,96,96,0.10)" }}>
+              <div className="flex items-center gap-2 text-xs">
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: "#8da8a8" }} />
+                <span style={{ color: "#0f2626" }}>Standard priority</span>
               </div>
-              <span className="font-semibold text-gray-900">{pendingStandard}</span>
+              <span className="num-display text-sm font-bold" style={{ color: "#0f2626" }}>
+                {myStats?.pendingTotal ?? 0}
+              </span>
             </div>
-            <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-xs">
-              <span className="text-gray-500 font-medium">Total pending</span>
-              <span className="font-bold text-gray-900">{myStats?.pendingTotal ?? 0}</span>
+            <div className="pt-3 border-t flex items-center justify-between text-xs" style={{ borderColor: "rgba(13,61,61,0.08)" }}>
+              <span className="font-semibold" style={{ color: "#4a6060" }}>Total pending</span>
+              <span className="num-display text-base font-bold" style={{ color: "#0f2626" }}>
+                {myStats?.pendingTotal ?? 0}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Top narratives */}
-        <div className="glass-card p-4">
-          <h2 className="text-xs font-semibold text-gray-700 mb-3">Top narratives (7 days)</h2>
-          {narratives?.length ? (
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-gray-400 uppercase tracking-wide text-[10px]">
-                  <th className="text-left pb-2 w-6">#</th>
-                  <th className="text-left pb-2">Claim</th>
-                  <th className="text-right pb-2 w-12">Posts</th>
-                  <th className="text-right pb-2 w-16">Label</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {narratives.map((n: { narrative: string; count: number; label: string }, i: number) => (
-                  <tr key={n.narrative} className="hover:bg-gray-50">
-                    <td className="py-2 text-gray-400 font-bold">{i + 1}</td>
-                    <td className="py-2 text-gray-800 pr-2">
-                      <p className="line-clamp-2 leading-snug">{n.narrative}</p>
-                    </td>
-                    <td className="py-2 text-right font-medium text-gray-700">{n.count}</td>
-                    <td className="py-2 text-right"><LabelBadge label={n.label as never} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <EmptyState title="No narratives yet" />
-          )}
+        {/* Narratives */}
+        <div className="lg:col-span-2">
+          <NarrativesPanel />
         </div>
       </div>
+
+      {/* Live feed */}
+      <LivePostTicker />
     </div>
   );
 }
 
 // ── Supervisor view ───────────────────────────────────────────────────────────
-
 function SupervisorView() {
   const { data: teamStats, isLoading } = useQuery({
-    queryKey: ['hitl', 'team-stats'],
+    queryKey: ["hitl", "team-stats"],
     queryFn: () => hitlApi.teamStats(),
     staleTime: 30_000,
   });
-
   const { data: alertsData } = useQuery({
-    queryKey: ['alerts', { resolved: false }],
-    queryFn: () => alertsApi.list({ resolved: false, limit: 4 }),
+    queryKey: ["alerts", { resolved: false }],
+    queryFn: () => alertsApi.list({ resolved: false, limit: 5 }),
   });
-
   const { data: dispatchStats } = useQuery({
-    queryKey: ['dispatch', 'stats'],
+    queryKey: ["dispatch", "stats"],
     queryFn: () => dispatchApi.getStats(),
     staleTime: 60_000,
   });
@@ -443,43 +540,48 @@ function SupervisorView() {
   if (isLoading) return <FullPageSpinner />;
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-        <StatCard label="Team reviews today"    value={(teamStats?.reviewedToday   ?? 0).toString()} icon={CheckSquare}  color="green"  />
-        <StatCard label="Team override rate"    value={`${teamStats?.overrideRate ?? 0}%`}           icon={AlertTriangle} color="yellow" />
-        <StatCard label="Active alerts"         value={(recentAlerts.length).toString()}              icon={ShieldAlert}  color="red"    />
-        <StatCard label="Responses dispatched"  value={(dispatchStats?.dispatchedToday ?? 0).toLocaleString()} icon={Send} color="emerald" />
+    <div className="space-y-5">
+      {/* KPI strip */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard
+          label="Team Reviews Today"
+          value={(teamStats?.reviewedToday ?? 0).toString()}
+          icon={CheckSquare}
+          color="teal"
+          sub="Across all analysts"
+        />
+        <StatCard
+          label="Team Override Rate"
+          value={`${teamStats?.overrideRate ?? 0}%`}
+          icon={AlertTriangle}
+          color="peach"
+          sub="Model disagreements"
+        />
+        <StatCard
+          label="Active Alerts"
+          value={recentAlerts.length.toString()}
+          icon={ShieldAlert}
+          color="red"
+          sub="Requiring attention"
+        />
+        <StatCard
+          label="Responses Dispatched"
+          value={(dispatchStats?.dispatchedToday ?? 0).toLocaleString()}
+          icon={Send}
+          color="mauve"
+          sub="Counter-narratives today"
+        />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* 3-column main grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Active alerts */}
-        <div className="glass-card p-4">
-          <h2 className="text-xs font-semibold text-gray-700 mb-3">Active alerts</h2>
+        <div className="glass-card p-5 lg:col-span-2">
+          <PanelHeader title="Active Alert Monitor" dot="#c0392b" badge={recentAlerts.length || "—"} />
           {recentAlerts.length ? (
             <div className="space-y-2">
               {recentAlerts.map((alert) => (
-                <div
-                  key={alert._id}
-                  className={`flex items-start gap-2.5 p-2.5 rounded-lg border text-xs ${
-                    alert.severity === 'high'
-                      ? 'bg-red-50 border-red-200'
-                      : alert.severity === 'medium'
-                      ? 'bg-amber-50 border-amber-200'
-                      : 'bg-emerald-50 border-emerald-200'
-                  }`}
-                >
-                  <span className={`w-1.5 h-1.5 rounded-full mt-1 flex-shrink-0 ${
-                    alert.severity === 'high' ? 'bg-red-500' : alert.severity === 'medium' ? 'bg-amber-500' : 'bg-emerald-500'
-                  }`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-gray-800 leading-snug">{alert.title}</p>
-                    <p className="text-gray-500 mt-0.5 truncate">{alert.message}</p>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <SeverityBadge severity={alert.severity} />
-                    <span className="text-gray-400 whitespace-nowrap">{formatRelative(alert.createdAt)}</span>
-                  </div>
-                </div>
+                <AlertRow key={alert._id} alert={alert} />
               ))}
             </div>
           ) : (
@@ -487,183 +589,254 @@ function SupervisorView() {
           )}
         </div>
 
-        {/* Top reviewers + queue breakdown */}
-        <div className="glass-card p-4 space-y-4">
+        {/* Top reviewers + queue */}
+        <div className="glass-card p-5 space-y-5">
           <div>
-            <h2 className="text-xs font-semibold text-gray-700 mb-2">Top reviewers today</h2>
+            <PanelHeader title="Top Reviewers Today" dot="#00897b" />
             {teamStats?.topReviewers?.length ? (
               <div className="space-y-2">
                 {teamStats.topReviewers.map((r, i) => (
-                  <div key={r.name} className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                  <div key={r.name} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <span
+                        className="w-6 h-6 rounded-full text-[10px] font-bold flex items-center justify-center flex-shrink-0"
+                        style={{ background: "rgba(0,137,123,0.12)", color: "#00897b" }}
+                      >
                         {i + 1}
                       </span>
-                      <span className="text-gray-700">{r.name}</span>
+                      <span className="text-xs" style={{ color: "#0f2626" }}>{r.name}</span>
                     </div>
-                    <span className="font-semibold text-gray-900">{r.count} reviews</span>
+                    <span className="text-xs font-semibold num-display" style={{ color: "#0f2626" }}>
+                      {r.count}
+                    </span>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-gray-400">No reviews recorded today.</p>
+              <p className="text-xs" style={{ color: "#8da8a8" }}>No reviews recorded today.</p>
             )}
           </div>
 
-          <div className="border-t border-gray-100 pt-3">
-            <h2 className="text-xs font-semibold text-gray-700 mb-2">Pending queue</h2>
-            <div className="space-y-1.5 text-xs">
+          <div className="pt-4" style={{ borderTop: "1px solid rgba(13,61,61,0.08)" }}>
+            <PanelHeader title="Pending Queue" />
+            <div className="space-y-2 text-xs">
               <div className="flex justify-between">
-                <span className="text-gray-600 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" /> High priority
+                <span className="flex items-center gap-1.5" style={{ color: "#4a6060" }}>
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: "#c0392b" }} />
+                  High priority
                 </span>
-                <span className="font-semibold text-gray-900">{teamStats?.pendingHigh ?? 0}</span>
+                <span className="font-semibold num-display" style={{ color: "#c0392b" }}>
+                  {teamStats?.pendingHigh ?? 0}
+                </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-gray-400 inline-block" /> Standard
+                <span className="flex items-center gap-1.5" style={{ color: "#4a6060" }}>
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: "#8da8a8" }} />
+                  Standard
                 </span>
-                <span className="font-semibold text-gray-900">{teamStats?.pendingStandard ?? 0}</span>
+                <span className="font-semibold num-display" style={{ color: "#0f2626" }}>
+                  {teamStats?.pendingStandard ?? 0}
+                </span>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Narratives + live feed */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div className="lg:col-span-2">
+          <NarrativesPanel />
+        </div>
+        <LivePostTicker />
+      </div>
     </div>
   );
 }
 
-// ── Super Admin view (full overview) ─────────────────────────────────────────
-
+// ── Super Admin / Org Admin view ──────────────────────────────────────────────
 type DailyEntry = {
-  day: string; date: string;
-  misinformation: number; factual: number; irrelevant: number;
+  day: string;
+  date: string;
+  misinformation: number;
+  factual: number;
+  irrelevant: number;
 };
 
 function SuperAdminView() {
   const { data: dailyBreakdown, isLoading: loadingBreakdown, isError: breakdownError } = useQuery({
-    queryKey: ['trends', 'daily-breakdown'],
-    queryFn:  () => trendsApi.dailyBreakdown(7),
+    queryKey: ["trends", "daily-breakdown"],
+    queryFn: () => trendsApi.dailyBreakdown(7),
   });
-
   const { data: narratives, isError: narrativesError } = useQuery({
-    queryKey: ['trends', 'top-narratives'],
-    queryFn:  () => trendsApi.topNarratives(7, 5),
+    queryKey: ["trends", "top-narratives"],
+    queryFn: () => trendsApi.topNarratives(7, 5),
   });
-
   const { data: platformData } = useQuery({
-    queryKey: ['trends', 'platform-ingestion'],
-    queryFn:  () => trendsApi.platformIngestion(),
+    queryKey: ["trends", "platform-ingestion"],
+    queryFn: () => trendsApi.platformIngestion(),
   });
-
   const { data: langData } = useQuery({
-    queryKey: ['trends', 'language-distribution'],
-    queryFn:  () => trendsApi.languageDistribution(),
+    queryKey: ["trends", "language-distribution"],
+    queryFn: () => trendsApi.languageDistribution(),
   });
-
   const { data: alertsData } = useQuery({
-    queryKey: ['alerts', { resolved: false }],
-    queryFn:  () => alertsApi.list({ resolved: false, limit: 4 }),
+    queryKey: ["alerts", { resolved: false }],
+    queryFn: () => alertsApi.list({ resolved: false, limit: 4 }),
   });
-
   const { data: pipeline } = useQuery({
-    queryKey: ['pipeline-status'],
-    queryFn:  () => modelHealthApi.getPipelineStatus(),
+    queryKey: ["pipeline-status"],
+    queryFn: () => modelHealthApi.getPipelineStatus(),
     refetchInterval: 30_000,
   });
-
   const { data: hitlPending } = useQuery({
-    queryKey: ['hitl', 'pending-count'],
-    queryFn:  () => hitlApi.list({ page: 1, limit: 1, status: 'pending' }),
+    queryKey: ["hitl", "pending-count"],
+    queryFn: () => hitlApi.list({ page: 1, limit: 1, status: "pending" }),
     staleTime: 30_000,
   });
-
   const { data: dispatchStats } = useQuery({
-    queryKey: ['dispatch', 'stats'],
-    queryFn:  () => dispatchApi.getStats(),
+    queryKey: ["dispatch", "stats"],
+    queryFn: () => dispatchApi.getStats(),
     staleTime: 60_000,
   });
-
   const { data: teamStats } = useQuery({
-    queryKey: ['hitl', 'team-stats'],
-    queryFn:  () => hitlApi.teamStats(),
+    queryKey: ["hitl", "team-stats"],
+    queryFn: () => hitlApi.teamStats(),
     staleTime: 30_000,
   });
 
   const typedDaily = (dailyBreakdown ?? []) as DailyEntry[];
-  const today       = typedDaily[typedDaily.length - 1];
-  const todayTotal  = today
-    ? today.misinformation + today.factual + today.irrelevant
-    : 0;
+  const today = typedDaily[typedDaily.length - 1];
+  const todayTotal = today ? today.misinformation + today.factual + today.irrelevant : 0;
   const flaggedCount = typedDaily.reduce((s, d) => s + d.misinformation, 0);
-
   const recentAlerts: Alert[] = alertsData?.data ?? [];
 
   const platformTotal = platformData?.reduce((s: number, p: { count: number }) => s + p.count, 0) ?? 0;
-  const platformRows  = (platformData ?? []).slice(0, 4).map((p: { _id: string; count: number }) => ({
+  const platformRows = (platformData ?? []).slice(0, 5).map((p: { _id: string; count: number }) => ({
     label: PLATFORM_LABELS[p._id as PostPlatform] ?? p._id,
+    id: p._id,
     count: p.count,
-    pct:   platformTotal > 0 ? Math.round((p.count / platformTotal) * 100) : 0,
+    pct: platformTotal > 0 ? Math.round((p.count / platformTotal) * 100) : 0,
   }));
 
   const langTotal = langData?.reduce((s: number, l: { count: number }) => s + l.count, 0) ?? 0;
-  const langRows  = LANG_ORDER.map((code) => {
+  const langRows = LANG_ORDER.map((code) => {
     const entry = langData?.find((l: { _id: string }) => l._id === code);
     const count = entry?.count ?? 0;
-    return { code, label: LANG_LABELS[code], pct: langTotal > 0 ? Math.round((count / langTotal) * 100) : 0 };
+    return { code, label: LANG_LABELS[code], count, pct: langTotal > 0 ? Math.round((count / langTotal) * 100) : 0 };
   }).filter((r) => r.pct > 0);
 
   if (loadingBreakdown) return <FullPageSpinner />;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {(breakdownError || narrativesError) && (
         <ErrorBanner message="Failed to load some dashboard data." />
       )}
-      {pipeline?.status === 'fallback'   && <FallbackModeAlert />}
-      {pipeline?.status === 'retraining' && pipeline.retrainingStartedAt && (
+      {pipeline?.status === "fallback" && <FallbackModeAlert />}
+      {pipeline?.status === "retraining" && pipeline.retrainingStartedAt && (
         <RetrainingProgressBanner startedAt={pipeline.retrainingStartedAt} />
       )}
 
-      {/* Stats row 1 */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-        <StatCard label="Posts ingested today"  value={todayTotal.toLocaleString()}                            icon={FileText}      color="indigo" />
-        <StatCard label="Flagged (7 days)"      value={flaggedCount.toLocaleString()}                          icon={AlertTriangle} color="red"    />
-        <StatCard label="Awaiting HITL review"  value={(hitlPending?.total ?? 0).toLocaleString()}             icon={Clock}         color="yellow" />
-        <StatCard label="Responses dispatched"  value={(dispatchStats?.dispatchedToday ?? 0).toLocaleString()} icon={Send}          color="green"  />
+      {/* Primary KPI strip — 6 tiles */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
+        <StatCard
+          label="Posts Today"
+          value={todayTotal.toLocaleString()}
+          icon={FileText}
+          color="teal"
+          sub="All platforms"
+        />
+        <StatCard
+          label="Flagged (7d)"
+          value={flaggedCount.toLocaleString()}
+          icon={AlertTriangle}
+          color="peach"
+          sub="Misinformation"
+        />
+        <StatCard
+          label="HITL Queue"
+          value={(hitlPending?.total ?? 0).toLocaleString()}
+          icon={Clock}
+          color="ocean"
+          sub="Awaiting review"
+        />
+        <StatCard
+          label="Dispatched Today"
+          value={(dispatchStats?.dispatchedToday ?? 0).toLocaleString()}
+          icon={Send}
+          color="mauve"
+          sub="Counter-narratives"
+        />
+        <StatCard
+          label="Team Reviews"
+          value={(teamStats?.reviewedToday ?? 0).toString()}
+          icon={CheckSquare}
+          color="teal"
+          sub="Analyst completions"
+        />
+        <StatCard
+          label="Override Rate"
+          value={`${teamStats?.overrideRate ?? 0}%`}
+          icon={Activity}
+          color="yellow"
+          sub="Model disagreements"
+        />
       </div>
 
-      {/* Stats row 2 — team */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-        <StatCard label="Team reviews today"  value={(teamStats?.reviewedToday   ?? 0).toString()}         icon={CheckSquare} color="emerald" />
-        <StatCard label="Team override rate"  value={`${teamStats?.overrideRate ?? 0}%`}                   icon={BarChart2}   color="yellow"  />
-        <StatCard label="Pending (high)"      value={(teamStats?.pendingHigh    ?? 0).toString()}           icon={ShieldAlert} color="red"     />
-        <StatCard label="Active reviewers"    value={(teamStats?.topReviewers?.length ?? 0).toString()}     icon={Users}       color="indigo"  />
+      {/* Secondary strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <StatCard
+          label="High Priority Pending"
+          value={(teamStats?.pendingHigh ?? 0).toString()}
+          icon={ShieldAlert}
+          color="red"
+        />
+        <StatCard
+          label="Active Reviewers"
+          value={(teamStats?.topReviewers?.length ?? 0).toString()}
+          icon={Users}
+          color="ocean"
+        />
+        <StatCard
+          label="Active Alerts"
+          value={recentAlerts.length.toString()}
+          icon={Zap}
+          color="peach"
+        />
+        <StatCard
+          label="Standard Pending"
+          value={(teamStats?.pendingStandard ?? 0).toString()}
+          icon={TrendingUp}
+          color="mauve"
+        />
       </div>
 
-      {/* 7-day classification breakdown + Live post ticker */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Chart — takes 2/3 width on large screens */}
-        <div className="glass-card p-4 lg:col-span-2">
-          <h2 className="text-sm font-semibold text-gray-800 mb-3">7-day classification breakdown</h2>
+      {/* 7-day chart + Live feed */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div className="glass-card p-5 lg:col-span-2">
+          <PanelHeader title="7-Day Classification Breakdown" dot="#5BA4CF" />
           {typedDaily.length ? (
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={typedDaily} margin={{ top: 4, right: 16, bottom: 0, left: 0 }} barCategoryGap="30%">
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-                <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} width={42} tickLine={false} axisLine={false}
-                  tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+              <BarChart data={typedDaily} margin={{ top: 4, right: 8, bottom: 0, left: 0 }} barCategoryGap="30%">
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(13,61,61,0.06)" vertical={false} />
+                <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#8da8a8", fontFamily: "Manrope" }} tickLine={false} axisLine={false} />
+                <YAxis
+                  tick={{ fontSize: 10, fill: "#8da8a8", fontFamily: "JetBrains Mono" }}
+                  width={42} tickLine={false} axisLine={false}
+                  tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
+                />
                 <Tooltip
-                  contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #f0f0f0' }}
+                  contentStyle={{ fontSize: 11, borderRadius: 12, border: "1px solid rgba(13,61,61,0.10)", background: "rgba(255,255,255,0.95)", backdropFilter: "blur(8px)" }}
                   formatter={(v: unknown, name: unknown) => [
-                    typeof v === 'number' ? v.toLocaleString() : String(v),
+                    typeof v === "number" ? v.toLocaleString() : String(v),
                     String(name).charAt(0).toUpperCase() + String(name).slice(1),
                   ] as [string, string]}
                 />
-                <Legend iconSize={8} iconType="square" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                <Legend iconSize={8} iconType="circle" wrapperStyle={{ fontSize: 11, paddingTop: 12, fontFamily: "Plus Jakarta Sans" }} />
                 <Bar dataKey="misinformation" stackId="a" fill="#E24B4A" name="Misinformation" />
-                <Bar dataKey="irrelevant"     stackId="a" fill="#9ca3af" name="Irrelevant"     />
-                <Bar dataKey="factual"        stackId="a" fill="#1D9E75" name="Factual"         radius={[3, 3, 0, 0]} />
+                <Bar dataKey="irrelevant"     stackId="a" fill="#b0c4c4" name="Irrelevant" />
+                <Bar dataKey="factual"        stackId="a" fill="#00897b" name="Factual" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -671,113 +844,121 @@ function SuperAdminView() {
           )}
         </div>
 
-        {/* Live post ticker — takes 1/3 width */}
         <LivePostTicker />
       </div>
 
-      {/* Top narratives + platform/language */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Top narratives with trend */}
-        <div className="glass-card p-4">
-          <h2 className="text-sm font-semibold text-gray-800 mb-3">Top narratives (7 days)</h2>
+      {/* Narratives + Platform/Language */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Narratives with sparkbars */}
+        <div className="glass-card p-5">
+          <PanelHeader title="Top Narrative Clusters — 7 days" dot="#B08BBF" />
           {narratives?.length ? (
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-gray-400 uppercase tracking-wide text-[10px] border-b border-gray-100">
-                  <th className="text-left pb-2 pr-2 w-6">#</th>
-                  <th className="text-left pb-2">Claim cluster</th>
-                  <th className="text-right pb-2 w-14">Posts</th>
-                  <th className="text-right pb-2 w-16">Trend</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {narratives.map((n: { narrative: string; count: number; label: string; trend?: number[] }, i: number) => (
-                  <tr key={n.narrative} className="hover:bg-gray-50">
-                    <td className="py-2.5 text-gray-400 font-bold pr-2">{i + 1}</td>
-                    <td className="py-2.5 text-gray-800 pr-3">
-                      <p className="line-clamp-1 leading-snug">{n.narrative}</p>
-                    </td>
-                    <td className="py-2.5 text-right font-semibold text-gray-700 tabular-nums">
-                      {n.count.toLocaleString()}
-                    </td>
-                    <td className="py-2.5 text-right">
-                      <SparkBar data={n.trend ?? Array(7).fill(0)} />
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="data-table w-full">
+                <thead>
+                  <tr>
+                    <th className="w-6">#</th>
+                    <th>Claim Cluster</th>
+                    <th className="text-right w-14">Posts</th>
+                    <th className="text-right w-16">Trend</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {narratives.map(
+                    (n: { narrative: string; count: number; label: string; trend?: number[] }, i: number) => (
+                      <tr key={n.narrative}>
+                        <td className="font-bold" style={{ color: "#8da8a8" }}>{i + 1}</td>
+                        <td>
+                          <p className="line-clamp-1 leading-snug" style={{ color: "#0f2626" }}>
+                            {n.narrative}
+                          </p>
+                        </td>
+                        <td className="text-right num-display text-sm font-semibold" style={{ color: "#0f2626" }}>
+                          {n.count.toLocaleString()}
+                        </td>
+                        <td className="text-right">
+                          <SparkBar data={n.trend ?? Array(7).fill(0)} />
+                        </td>
+                      </tr>
+                    ),
+                  )}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <EmptyState title="No narratives yet" />
           )}
         </div>
 
-        {/* Platform + Language */}
-        <div className="glass-card p-4 space-y-4">
+        {/* Platform + Language intel */}
+        <div className="glass-card p-5 space-y-5">
+          {/* Platform breakdown */}
           <div>
-            <h2 className="text-xs font-semibold text-gray-700 mb-2">Platform ingestion today</h2>
+            <PanelHeader title="Platform Ingestion Today" dot="#5BA4CF" />
             {platformRows.length ? (
-              <div className="space-y-2">
-                {platformRows.map((p) => (
-                  <div key={p.label} className="flex items-center justify-between text-xs">
-                    <span className="text-gray-600 w-28">{p.label}</span>
-                    <span className="font-medium text-gray-900 w-16 text-right">{p.count.toLocaleString()}</span>
-                    <span className="text-gray-400 w-10 text-right">{p.pct}%</span>
-                  </div>
-                ))}
+              <div className="space-y-2.5">
+                {platformRows.map((p) => {
+                  const chip = PLATFORM_CHIP[p.id] ?? PLATFORM_CHIP.submission;
+                  return (
+                    <div key={p.label} className="flex items-center gap-3 text-xs">
+                      <span
+                        className="w-20 font-medium text-[11px] flex-shrink-0 px-1.5 py-0.5 rounded-md text-center"
+                        style={{ background: chip.bg, color: chip.color }}
+                      >
+                        {p.label}
+                      </span>
+                      <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(13,61,61,0.07)" }}>
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{ width: `${p.pct}%`, background: chip.color }}
+                        />
+                      </div>
+                      <span className="w-8 text-right tabular-nums" style={{ color: "#4a6060" }}>{p.pct}%</span>
+                      <span className="w-16 text-right tabular-nums font-semibold num-display" style={{ color: "#0f2626" }}>
+                        {p.count.toLocaleString()}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
-              <p className="text-xs text-gray-400">No ingestion data for today.</p>
+              <p className="text-xs" style={{ color: "#8da8a8" }}>No ingestion data for today.</p>
             )}
           </div>
-          <div>
-            <h2 className="text-xs font-semibold text-gray-700 mb-2">Language distribution</h2>
+
+          {/* Language distribution */}
+          <div className="pt-4" style={{ borderTop: "1px solid rgba(13,61,61,0.08)" }}>
+            <PanelHeader title="Language Distribution" dot="#00897b" />
             {langRows.length ? (
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 {langRows.map((l) => (
-                  <div key={l.code} className="flex items-center gap-2 text-xs">
-                    <span className="w-14 text-gray-500">{l.label}</span>
-                    <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${l.pct}%` }} />
+                  <div key={l.code} className="flex items-center gap-3 text-xs">
+                    <span className="w-14 text-[11px] font-medium" style={{ color: "#4a6060" }}>{l.label}</span>
+                    <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(13,61,61,0.07)" }}>
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${l.pct}%`, background: "linear-gradient(90deg, #00897b, #1a5252)" }}
+                      />
                     </div>
-                    <span className="w-8 text-right text-gray-400">{l.pct}%</span>
+                    <span className="w-8 text-right tabular-nums" style={{ color: "#4a6060" }}>{l.pct}%</span>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-gray-400">No language data for today.</p>
+              <p className="text-xs" style={{ color: "#8da8a8" }}>No language data for today.</p>
             )}
           </div>
         </div>
       </div>
 
       {/* Alerts + Top reviewers */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="glass-card p-4">
-          <h2 className="text-xs font-semibold text-gray-700 mb-3">Active alerts</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="glass-card p-5">
+          <PanelHeader title="Active Alert Monitor" dot="#c0392b" badge={recentAlerts.length || "—"} />
           {recentAlerts.length ? (
             <div className="space-y-2">
               {recentAlerts.map((alert) => (
-                <div
-                  key={alert._id}
-                  className={`flex items-start gap-2.5 p-2.5 rounded-lg border text-xs ${
-                    alert.severity === 'high'   ? 'bg-red-50 border-red-200'
-                    : alert.severity === 'medium' ? 'bg-amber-50 border-amber-200'
-                    : 'bg-emerald-50 border-emerald-200'
-                  }`}
-                >
-                  <span className={`w-1.5 h-1.5 rounded-full mt-1 flex-shrink-0 ${
-                    alert.severity === 'high' ? 'bg-red-500' : alert.severity === 'medium' ? 'bg-amber-500' : 'bg-emerald-500'
-                  }`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-gray-800 leading-snug">{alert.title}</p>
-                    <p className="text-gray-500 mt-0.5 truncate">{alert.message}</p>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <SeverityBadge severity={alert.severity} />
-                    <span className="text-gray-400 whitespace-nowrap">{formatRelative(alert.createdAt)}</span>
-                  </div>
-                </div>
+                <AlertRow key={alert._id} alert={alert} />
               ))}
             </div>
           ) : (
@@ -786,37 +967,76 @@ function SuperAdminView() {
         </div>
 
         {teamStats?.topReviewers?.length ? (
-          <div className="glass-card p-4">
-            <h2 className="text-xs font-semibold text-gray-700 mb-3">Top reviewers today</h2>
-            <div className="space-y-2">
+          <div className="glass-card p-5">
+            <PanelHeader title="Top Reviewers Today" dot="#00897b" />
+            <div className="space-y-2.5">
               {teamStats.topReviewers.map((r, i) => (
-                <div key={r.name} className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
-                      {i + 1}
-                    </span>
-                    <span className="text-gray-700">{r.name}</span>
+                <div key={r.name} className="flex items-center gap-3">
+                  <span
+                    className="w-7 h-7 rounded-full text-[11px] font-bold flex items-center justify-center flex-shrink-0"
+                    style={{ background: "rgba(0,137,123,0.12)", color: "#00897b" }}
+                  >
+                    {i + 1}
+                  </span>
+                  <span className="flex-1 text-sm" style={{ color: "#0f2626" }}>{r.name}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="num-display text-sm font-bold" style={{ color: "#0f2626" }}>{r.count}</span>
+                    <span className="text-[10px]" style={{ color: "#8da8a8" }}>reviews</span>
                   </div>
-                  <span className="font-semibold text-gray-900">{r.count} reviews</span>
                 </div>
               ))}
             </div>
           </div>
-        ) : <div />}
+        ) : (
+          <div className="glass-card p-5 flex items-center justify-center">
+            <EmptyState title="No reviewer data" description="Reviews will appear here once analysts have submitted today." />
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 // ── Root component ────────────────────────────────────────────────────────────
-
 export default function Dashboard() {
   const { user } = useAuth();
-
   if (!user) return <FullPageSpinner />;
 
-  if (user.role === 'analyst')        return <AnalystView />;
-  if (user.role === 'senior_analyst') return <SeniorAnalystView />;
-  if (user.role === 'supervisor')     return <SupervisorView />;
-  return <SuperAdminView />;
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  const dateStr = now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+
+  return (
+    <div>
+      {/* Page header */}
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <div
+              className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: "rgba(0,137,123,0.12)" }}
+            >
+              <Activity style={{ width: "16px", height: "16px", color: "#00897b" }} />
+            </div>
+            <h1 className="text-2xl font-bold" style={{ color: "#0f2626", fontFamily: "Manrope, sans-serif", letterSpacing: "-0.01em" }}>
+              Analyst Intelligence Hub
+            </h1>
+          </div>
+          <p className="text-sm pl-10" style={{ color: "#4a6060" }}>
+            Real-time narrative surveillance &amp; misinformation tracking
+          </p>
+        </div>
+        <div className="text-right flex-shrink-0 hidden sm:block">
+          <p className="num-display text-lg font-bold" style={{ color: "#0f2626" }}>{timeStr}</p>
+          <p className="text-[11px] mt-0.5" style={{ color: "#8da8a8", fontFamily: '"Plus Jakarta Sans", sans-serif' }}>{dateStr}</p>
+        </div>
+      </div>
+
+      {/* Role-based view */}
+      {user.role === "analyst"        && <AnalystView />}
+      {user.role === "senior_analyst" && <SeniorAnalystView />}
+      {user.role === "supervisor"     && <SupervisorView />}
+      {(user.role === "org_admin" || user.role === "super_admin") && <SuperAdminView />}
+    </div>
+  );
 }

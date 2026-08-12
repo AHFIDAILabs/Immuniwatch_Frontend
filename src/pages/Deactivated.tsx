@@ -1,5 +1,5 @@
-import { ShieldOff, Mail } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { ShieldOff, Mail } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
 export default function Deactivated() {
   const { logout } = useAuth();
@@ -11,18 +11,22 @@ export default function Deactivated() {
           <ShieldOff className="h-8 w-8 text-red-500" />
         </div>
 
-        <h1 className="text-xl font-bold text-gray-900 mb-2">Account Deactivated</h1>
+        <h1 className="text-xl font-bold text-gray-900 mb-2">
+          Account Deactivated
+        </h1>
         <p className="text-sm text-gray-500 leading-relaxed mb-6">
           Your account has been deactivated by your organization administrator.
           You cannot log in until it is reactivated.
         </p>
 
         <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 mb-6 text-left">
-          <p className="text-xs font-semibold text-red-700 mb-1">What to do next</p>
+          <p className="text-xs font-semibold text-red-700 mb-1">
+            What to do next
+          </p>
           <p className="text-xs text-red-600 leading-relaxed">
-            Contact your <strong>Organization Admin</strong> or <strong>Supervisor</strong> to
-            request reactivation. Ask them to log in and re-enable your account from
-            the User Management page.
+            Contact your <strong>Organization Admin</strong> or{" "}
+            <strong>Supervisor</strong> to request reactivation. Ask them to log
+            in and re-enable your account from the User Management page.
           </p>
         </div>
 
@@ -35,7 +39,9 @@ export default function Deactivated() {
         </a>
 
         <button
-          onClick={() => { void logout(); }}
+          onClick={() => {
+            void logout();
+          }}
           className="w-full px-4 py-2.5 text-sm text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
         >
           Back to Login

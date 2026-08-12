@@ -12,7 +12,7 @@ const CONFIG: Record<ToastType, {
   success: {
     icon:      CheckCircle,
     container: 'bg-white border-l-4 border-l-emerald-500 border border-gray-200',
-    iconColor: 'text-emerald-500',
+    iconColor: 'text-[#00897b]',
     title:     'text-gray-800',
   },
   error: {

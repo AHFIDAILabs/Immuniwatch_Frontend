@@ -1,76 +1,117 @@
-﻿import { useQuery } from '@tanstack/react-query';
-import { Send, CheckCircle, Clock, BarChart2 } from 'lucide-react';
-import { dispatchApi } from '../api/dispatch';
-import { StatCard } from '../components/StatCard';
-import { FullPageSpinner } from '../components/Spinner';
-import { EmptyState } from '../components/EmptyState';
-import { ErrorBanner } from '../components/ErrorBanner';
-import { formatRelative, PLATFORM_LABELS, LANG_FLAGS } from '../lib/utils';
-import type { PostPlatform, PostLanguage } from '../types/api';
+import { useQuery } from "@tanstack/react-query";
+import { Send, CheckCircle, Clock, BarChart2, ArrowRight } from "lucide-react";
+import { dispatchApi } from "../api/dispatch";
+import { StatCard } from "../components/StatCard";
+import { FullPageSpinner } from "../components/Spinner";
+import { EmptyState } from "../components/EmptyState";
+import { ErrorBanner } from "../components/ErrorBanner";
+import { formatRelative, PLATFORM_LABELS, LANG_FLAGS } from "../lib/utils";
+import type { PostPlatform, PostLanguage } from "../types/api";
 
-const STATUS_COLORS: Record<string, string> = {
-  accepted: 'bg-emerald-100 text-emerald-700',
-  sent:     'bg-blue-100 text-blue-700',
-  pending:  'bg-amber-100 text-amber-700',
-  rejected: 'bg-red-100 text-red-700',
+const PLATFORM_CHIP: Record<string, { bg: string; color: string }> = {
+  bluesky:    { bg: "rgba(91,164,207,0.12)",  color: "#1a6fa0" },
+  youtube:    { bg: "rgba(192,57,43,0.10)",   color: "#b03325" },
+  twitter:    { bg: "rgba(37,99,235,0.10)",   color: "#1e40af" },
+  facebook:   { bg: "rgba(0,137,123,0.10)",   color: "#005048" },
+  submission: { bg: "rgba(74,96,96,0.08)",    color: "#4a6060" },
 };
+
+const STATUS_CHIP: Record<string, { bg: string; color: string; border: string }> = {
+  accepted: { bg: "rgba(0,137,123,0.08)",   color: "#005048", border: "rgba(0,137,123,0.18)"   },
+  sent:     { bg: "rgba(37,99,235,0.08)",   color: "#1e40af", border: "rgba(37,99,235,0.18)"   },
+  pending:  { bg: "rgba(217,119,6,0.08)",   color: "#b45309", border: "rgba(217,119,6,0.18)"   },
+  rejected: { bg: "rgba(192,57,43,0.08)",   color: "#c0392b", border: "rgba(192,57,43,0.18)"   },
+};
+
+const PIPELINE_STEPS = [
+  { n: "1", icon: "🤖", title: "Classification",  desc: "ML model labels post as misinformation, factual, or irrelevant" },
+  { n: "2", icon: "👁",  title: "HITL Review",     desc: "Analyst approves, overrides, or rejects the flagged post" },
+  { n: "3", icon: "✍️", title: "Response Gen.",    desc: "Counter-narrative drafted using Knowledge Base context" },
+  { n: "4", icon: "📤", title: "Platform Push",    desc: "Response dispatched via platform API or webhook" },
+];
 
 export default function ResponseDispatch() {
   const { data: stats, isLoading, isError } = useQuery({
-    queryKey: ['dispatch', 'stats'],
+    queryKey: ["dispatch", "stats"],
     queryFn: () => dispatchApi.getStats(),
     staleTime: 60_000,
   });
 
   const { data: dispatches, isLoading: loadingList } = useQuery({
-    queryKey: ['dispatch', 'list'],
+    queryKey: ["dispatch", "list"],
     queryFn: () => dispatchApi.list({ page: 1, limit: 20 }),
   });
 
   if (isLoading) return <FullPageSpinner />;
 
-  const acceptancePct = stats ? (stats.platformAcceptanceRate * 100).toFixed(1) : '—';
+  const acceptancePct = stats ? (stats.platformAcceptanceRate * 100).toFixed(1) : "—";
+  const maxPlatformCount = Math.max(...(stats?.byPlatform?.map((p) => p.count) ?? [1]), 1);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-base font-semibold text-gray-900">Response dispatch</h1>
-        <span className="text-xs text-gray-400">Today's activity</span>
+    <div className="space-y-5">
+      {/* Page header */}
+      <div className="flex items-start gap-3">
+        <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(176,139,191,0.12)" }}>
+          <Send style={{ width: "16px", height: "16px", color: "#B08BBF" }} />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: "#0f2626", fontFamily: "Manrope, sans-serif", letterSpacing: "-0.01em" }}>
+            Dispatch Monitor
+          </h1>
+          <p className="text-sm" style={{ color: "#4a6060" }}>
+            Counter-narrative delivery pipeline and platform acceptance tracking
+          </p>
+        </div>
       </div>
 
       {isError && <ErrorBanner message="Failed to load dispatch data." />}
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-        <StatCard label="Dispatched today"        value={(stats?.dispatchedToday ?? 0).toLocaleString()} icon={Send}        color="green"  />
-        <StatCard label="Avg response time"        value={stats ? `${stats.avgResponseTimeMin}m` : '—'}  icon={Clock}       color="indigo" />
-        <StatCard label="Platform acceptance"      value={`${acceptancePct}%`}                            icon={CheckCircle} color="green"  />
-        <StatCard label="Platforms active"         value={(stats?.byPlatform?.length ?? 0).toString()}    icon={BarChart2}   color="yellow" />
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard label="Dispatched Today"     value={(stats?.dispatchedToday ?? 0).toLocaleString()} icon={Send}        color="mauve" />
+        <StatCard label="Avg Response Time"     value={stats ? `${stats.avgResponseTimeMin}m` : "—"}  icon={Clock}       color="ocean" />
+        <StatCard label="Platform Acceptance"   value={`${acceptancePct}%`}                            icon={CheckCircle} color="teal"  />
+        <StatCard label="Platforms Active"      value={(stats?.byPlatform?.length ?? 0).toString()}    icon={BarChart2}   color="peach" />
       </div>
 
-      {/* Platform breakdown + Recent dispatches */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Platform breakdown + Pipeline */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Platform breakdown */}
-        <div className="glass-card p-4">
-          <h2 className="text-xs font-semibold text-gray-700 mb-3">By platform</h2>
+        <div className="glass-card p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: "#5BA4CF" }} />
+            <h2 className="label-caps text-[#4a6060]">Dispatch by Platform</h2>
+          </div>
           {stats?.byPlatform?.length ? (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {stats.byPlatform.map((p) => {
                 const label = PLATFORM_LABELS[p.platform as PostPlatform] ?? p.platform;
-                const pct = (p.acceptanceRate * 100).toFixed(0);
-                const maxCount = Math.max(...stats.byPlatform.map((x) => x.count));
-                const barW = maxCount > 0 ? Math.round((p.count / maxCount) * 100) : 0;
+                const pct   = (p.acceptanceRate * 100).toFixed(0);
+                const barW  = Math.round((p.count / maxPlatformCount) * 100);
+                const chip  = PLATFORM_CHIP[p.platform] ?? PLATFORM_CHIP.submission;
                 return (
                   <div key={p.platform}>
-                    <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="text-gray-700 font-medium">{label}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="text-gray-500">{p.count.toLocaleString()} sent</span>
-                        <span className="text-emerald-600 font-medium">{pct}% accepted</span>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span
+                        className="text-[11px] font-semibold px-2 py-0.5 rounded-lg"
+                        style={{ background: chip.bg, color: chip.color }}
+                      >
+                        {label}
+                      </span>
+                      <div className="flex items-center gap-3 text-[11px]">
+                        <span className="tabular-nums" style={{ color: "#4a6060" }}>
+                          {p.count.toLocaleString()} sent
+                        </span>
+                        <span className="font-semibold tabular-nums" style={{ color: "#00897b" }}>
+                          {pct}% accepted
+                        </span>
                       </div>
                     </div>
-                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${barW}%` }} />
+                    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(13,61,61,0.07)" }}>
+                      <div
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{ width: `${barW}%`, background: chip.color }}
+                      />
                     </div>
                   </div>
                 );
@@ -81,24 +122,40 @@ export default function ResponseDispatch() {
           )}
         </div>
 
-        {/* How it works */}
-        <div className="glass-card p-4">
-          <h2 className="text-xs font-semibold text-gray-700 mb-3">Dispatch pipeline</h2>
-          <div className="space-y-3">
-            {[
-              { step: '1', title: 'Classification', desc: 'ML model labels post as misinformation, factual, or irrelevant' },
-              { step: '2', title: 'HITL Review',    desc: 'Analyst approves, overrides, or rejects the flagged post' },
-              { step: '3', title: 'Response gen.',  desc: 'Counter-narrative drafted using Knowledge Base context' },
-              { step: '4', title: 'Platform push',  desc: 'Response dispatched via platform API or webhook' },
-            ].map((s) => (
-              <div key={s.step} className="flex gap-3">
-                <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center text-[10px] font-bold text-emerald-700 flex-shrink-0">
-                  {s.step}
+        {/* Pipeline steps */}
+        <div className="glass-card p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: "#00897b" }} />
+            <h2 className="label-caps text-[#4a6060]">Dispatch Pipeline</h2>
+          </div>
+          <div className="space-y-0">
+            {PIPELINE_STEPS.map((s, i) => (
+              <div key={s.n}>
+                <div className="flex items-start gap-3 py-3">
+                  <div
+                    className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-sm"
+                    style={{ background: "rgba(0,137,123,0.10)", border: "1px solid rgba(0,137,123,0.16)" }}
+                  >
+                    {s.icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0"
+                        style={{ background: "#0d3d3d", color: "#a7f3d0" }}
+                      >
+                        {s.n}
+                      </span>
+                      <p className="text-sm font-semibold" style={{ color: "#0f2626" }}>{s.title}</p>
+                    </div>
+                    <p className="text-xs mt-0.5 ml-6" style={{ color: "#4a6060" }}>{s.desc}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-gray-800">{s.title}</p>
-                  <p className="text-[11px] text-gray-500">{s.desc}</p>
-                </div>
+                {i < PIPELINE_STEPS.length - 1 && (
+                  <div className="flex items-center ml-4 mb-0">
+                    <ArrowRight className="h-3 w-3 rotate-90" style={{ color: "rgba(13,61,61,0.20)" }} />
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -107,47 +164,59 @@ export default function ResponseDispatch() {
 
       {/* Recent dispatches */}
       <div className="glass-card overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-100">
-          <h2 className="text-xs font-semibold text-gray-700">Recent dispatches</h2>
+        <div className="px-5 py-3.5 flex items-center gap-2" style={{ borderBottom: "1px solid rgba(13,61,61,0.08)" }}>
+          <span className="w-1.5 h-1.5 rounded-full" style={{ background: "#B08BBF" }} />
+          <h2 className="label-caps text-[#4a6060]">Recent Dispatches</h2>
         </div>
         {loadingList ? (
-          <FullPageSpinner />
+          <div className="p-8"><FullPageSpinner /></div>
         ) : !dispatches?.data?.length ? (
-          <EmptyState title="No dispatches yet" description="Dispatches will appear after HITL approvals." />
+          <div className="p-8">
+            <EmptyState title="No dispatches yet" description="Dispatches will appear after HITL approvals." />
+          </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-gray-50 border-b border-gray-100">
+            <table className="data-table w-full min-w-[560px]">
+              <thead>
                 <tr>
-                  <th className="px-3 py-2.5 text-left font-semibold text-gray-500 uppercase tracking-wide text-[10px]">Response excerpt</th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-gray-500 uppercase tracking-wide text-[10px]">Platform</th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-gray-500 uppercase tracking-wide text-[10px]">Lang</th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-gray-500 uppercase tracking-wide text-[10px]">Status</th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-gray-500 uppercase tracking-wide text-[10px]">Dispatched</th>
+                  <th>Response Excerpt</th>
+                  <th>Platform</th>
+                  <th>Lang</th>
+                  <th>Status</th>
+                  <th>Dispatched</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
-                {dispatches.data.map((d) => (
-                  <tr key={d._id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-3 py-2.5">
-                      <p className="line-clamp-2 text-gray-700 leading-snug">{d.response}</p>
-                    </td>
-                    <td className="px-3 py-2.5 text-gray-500">
-                      {PLATFORM_LABELS[d.platform as PostPlatform] ?? d.platform}
-                    </td>
-                    <td className="px-3 py-2.5 text-gray-500">
-                      <span title={d.language}>{LANG_FLAGS[d.language as PostLanguage] ?? d.language}</span>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium capitalize ${STATUS_COLORS[d.status] ?? 'bg-gray-100 text-gray-600'}`}>
-                        {d.status}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5 text-gray-400 whitespace-nowrap">
-                      {formatRelative(d.dispatchedAt)}
-                    </td>
-                  </tr>
-                ))}
+              <tbody>
+                {dispatches.data.map((d) => {
+                  const chip   = PLATFORM_CHIP[d.platform] ?? PLATFORM_CHIP.submission;
+                  const status = STATUS_CHIP[d.status] ?? { bg: "rgba(74,96,96,0.08)", color: "#4a6060", border: "rgba(74,96,96,0.15)" };
+                  return (
+                    <tr key={d._id}>
+                      <td>
+                        <p className="line-clamp-2 leading-snug" style={{ color: "#0f2626" }}>{d.response}</p>
+                      </td>
+                      <td>
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md" style={{ background: chip.bg, color: chip.color }}>
+                          {PLATFORM_LABELS[d.platform as PostPlatform] ?? d.platform}
+                        </span>
+                      </td>
+                      <td>
+                        <span title={d.language}>{LANG_FLAGS[d.language as PostLanguage] ?? d.language}</span>
+                      </td>
+                      <td>
+                        <span
+                          className="inline-flex px-2 py-0.5 rounded-lg text-[10px] font-semibold capitalize"
+                          style={{ background: status.bg, color: status.color, border: `1px solid ${status.border}` }}
+                        >
+                          {d.status}
+                        </span>
+                      </td>
+                      <td className="tabular-nums" style={{ color: "#8da8a8" }}>
+                        {formatRelative(d.dispatchedAt)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

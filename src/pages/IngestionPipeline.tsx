@@ -1,28 +1,7 @@
-﻿// Changes vs. original:
-//   • formatRel: now returns '—' for empty strings and invalid dates instead
-//     of 'NaNh ago'. The backend returns lastEventAt: '' for unconnected
-//     platforms — new Date('').getTime() produces NaN which propagated into
-//     the displayed string.
-//   • STATUS_META: added 'not_integrated' entry (gray, WifiOff icon) and
-//     'mock' entry. Without it the fallback was STATUS_META.down (red),
-//     incorrectly implying these connectors had failed rather than not being
-//     wired yet.
-//   • Degraded explanation banner: shown when pipeline.status === 'degraded'
-//     so operators understand this is a cold-start condition, not a failure.
-//   • Mock mode banner: shown when pipeline.mockMode === true or
-//     pipeline.status === 'mock'.
-//   • Pipeline stage colours: stages 1–2 are always emerald (ingest + Kafka
-//     are infrastructure-level, not ML-dependent); stages 3–5 amber when
-//     degraded/fallback.
-//   • Kafka disabled banner: shown when kafka.enabled === false instead of
-//     an empty topics table.
-//   • Model version: 'unknown' shown as '—' with a subtle note that the
-//     service is waking up rather than a confusing literal "unknown".
-//   • Connector note column: shows the Phase 2 note string when present.
-
 import { useQuery }          from '@tanstack/react-query';
 import {
-  Network, Wifi, AlertCircle, CheckCircle, Activity, WifiOff, Clock, Radio,
+  Network, Wifi, AlertCircle, CheckCircle, Activity, WifiOff, Clock,
+  Radio, ChevronRight,
 } from 'lucide-react';
 import { modelHealthApi }   from '../api/modelHealth';
 import { pipelineApi }      from '../api/pipeline';
@@ -33,46 +12,42 @@ import { ErrorBanner }       from '../components/ErrorBanner';
 import { LABEL_META, LANG_LABELS, formatRelative } from '../lib/utils';
 import type { RecentPost }   from '../types/api';
 
-// ── Status metadata ───────────────────────────────────────────────────────────
-
-const STATUS_META: Record<string, {
-  color: string; bg: string; Icon: React.ElementType; label: string;
-}> = {
-  active:         { color: 'text-emerald-700', bg: 'bg-emerald-100', Icon: CheckCircle, label: 'Active'          },
-  degraded:       { color: 'text-amber-700',   bg: 'bg-amber-100',   Icon: AlertCircle, label: 'Degraded'        },
-  // 'waiting' = no data yet; connector is healthy but ingestion hasn't populated DB
-  waiting:        { color: 'text-blue-600',    bg: 'bg-blue-50',     Icon: Clock,       label: 'Waiting for data' },
-  down:           { color: 'text-red-700',     bg: 'bg-red-100',     Icon: WifiOff,     label: 'Down'            },
-  not_integrated: { color: 'text-gray-500',    bg: 'bg-gray-100',    Icon: WifiOff,     label: 'Not integrated'  },
-  mock:           { color: 'text-amber-700',   bg: 'bg-amber-100',   Icon: AlertCircle, label: 'Mock'            },
+// ── Status metadata ────────────────────────────────────────────────────────────
+const STATUS_META: Record<string, { bg: string; color: string; border: string; Icon: React.ElementType; label: string }> = {
+  active:         { bg: 'rgba(0,137,123,0.08)',  color: '#005048', border: 'rgba(0,137,123,0.18)',  Icon: CheckCircle, label: 'Active'         },
+  degraded:       { bg: 'rgba(217,119,6,0.08)',  color: '#b45309', border: 'rgba(217,119,6,0.18)',  Icon: AlertCircle, label: 'Degraded'       },
+  waiting:        { bg: 'rgba(37,99,235,0.08)',  color: '#1e40af', border: 'rgba(37,99,235,0.16)',  Icon: Clock,       label: 'Waiting'        },
+  down:           { bg: 'rgba(192,57,43,0.08)',  color: '#c0392b', border: 'rgba(192,57,43,0.16)',  Icon: WifiOff,     label: 'Down'           },
+  not_integrated: { bg: 'rgba(74,96,96,0.07)',   color: '#4a6060', border: 'rgba(74,96,96,0.14)',   Icon: WifiOff,     label: 'Not integrated' },
+  mock:           { bg: 'rgba(217,119,6,0.08)',  color: '#b45309', border: 'rgba(217,119,6,0.18)',  Icon: AlertCircle, label: 'Mock'           },
 };
 
 const PIPELINE_STAGES = [
   { id: 1, label: 'Ingest',    desc: 'Platform connectors pull posts via APIs / webhooks' },
   { id: 2, label: 'Kafka',     desc: 'Events streamed through Kafka topics for dedup + buffering' },
   { id: 3, label: 'Classify',  desc: 'ML service assigns label + confidence score' },
-  { id: 4, label: 'HITL gate', desc: 'High-risk posts routed to human review queue' },
+  { id: 4, label: 'HITL Gate', desc: 'High-risk posts routed to human review queue' },
   { id: 5, label: 'Dispatch',  desc: 'Approved counter-narratives pushed to platforms' },
 ];
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+const PLATFORM_CHIP: Record<string, { bg: string; color: string }> = {
+  bluesky:    { bg: 'rgba(91,164,207,0.12)',  color: '#1a6fa0' },
+  youtube:    { bg: 'rgba(192,57,43,0.10)',   color: '#b03325' },
+};
 
 // FIX: returns '—' for empty strings and invalid dates instead of 'NaNh ago'.
-// The backend sends lastEventAt: '' for unconnected platforms; new Date('').getTime()
-// is NaN which previously propagated directly into the displayed string.
 function formatRel(iso: string): string {
   if (!iso) return '—';
   const dt = new Date(iso);
   if (isNaN(dt.getTime())) return '—';
   const diff = Date.now() - dt.getTime();
-  const mins  = Math.floor(diff / 60_000);
+  const mins = Math.floor(diff / 60_000);
   if (mins < 1)  return 'just now';
   if (mins < 60) return `${mins}m ago`;
   return `${Math.floor(mins / 60)}h ago`;
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
-
+// ── Component ──────────────────────────────────────────────────────────────────
 export default function IngestionPipeline() {
   const { data: pipeline, isLoading, isError } = useQuery({
     queryKey: ['pipeline-status'],
@@ -95,7 +70,7 @@ export default function IngestionPipeline() {
   const { data: recentFeed } = useQuery({
     queryKey: ['pipeline', 'recent'],
     queryFn:  () => pipelineApi.getRecentFeed(),
-    refetchInterval: 60_000,  // ML service updates every ~60 s
+    refetchInterval: 60_000,
   });
 
   const activeConnectors = connectors?.filter((c) => c.status === 'active').length ?? 0;
@@ -104,111 +79,114 @@ export default function IngestionPipeline() {
 
   if (isLoading) return <FullPageSpinner />;
 
-  const status        = pipeline?.status ?? 'unknown';
-  const circuitState  = pipeline?.mlService?.circuitState ?? 'CLOSED';
-  const isHealthy     = status === 'healthy';
-  const isDegraded    = status === 'degraded';
-  const isFallback    = status === 'fallback';
-  const isMock        = status === 'mock' || pipeline?.mockMode === true;
-  const modelVersion  = pipeline?.mlService?.modelVersion;
+  const status       = pipeline?.status ?? 'unknown';
+  const circuitState = pipeline?.mlService?.circuitState ?? 'CLOSED';
+  const isHealthy    = status === 'healthy';
+  const isDegraded   = status === 'degraded';
+  const isFallback   = status === 'fallback';
+  const isMock       = status === 'mock' || pipeline?.mockMode === true;
+  const modelVersion = pipeline?.mlService?.modelVersion;
 
-  // Stages 1–2 (Ingest, Kafka) are infrastructure — always show them as healthy.
-  // Stages 3–5 (Classify, HITL, Dispatch) are ML-dependent — amber when degraded.
-  const stageClass = (id: number) => {
-    if (id <= 2)    return 'bg-emerald-600 text-white';
-    if (isHealthy)  return 'bg-emerald-600 text-white';
-    if (isFallback) return 'bg-red-500     text-white';
-    if (isDegraded) return 'bg-amber-500   text-white';
-    return 'bg-emerald-600 text-white';
-  };
+  // Stage pill color: infra stages (1-2) always deep emerald, ML stages use status color
+  function stageStyle(id: number): React.CSSProperties {
+    if (id <= 2 || isHealthy) return { background: '#0d3d3d', color: '#fff' };
+    if (isFallback)           return { background: '#c0392b', color: '#fff' };
+    if (isDegraded)           return { background: '#d97706', color: '#fff' };
+    return { background: '#0d3d3d', color: '#fff' };
+  }
 
-  const statusPill = isHealthy
-    ? 'bg-emerald-50 text-emerald-700'
-    : isMock
-    ? 'bg-amber-50 text-amber-700'
-    : isDegraded || isFallback
-    ? 'bg-amber-50 text-amber-700'
-    : 'bg-gray-100 text-gray-500';
-
-  const statusDot = isHealthy   ? 'bg-emerald-500'
-                  : isFallback  ? 'bg-red-500'
-                  : 'bg-amber-500';
+  const statusChip = isHealthy
+    ? { bg: 'rgba(0,137,123,0.10)', color: '#005048', border: 'rgba(0,137,123,0.20)', dot: '#00897b' }
+    : isMock || isDegraded
+    ? { bg: 'rgba(217,119,6,0.10)', color: '#b45309', border: 'rgba(217,119,6,0.20)', dot: '#d97706' }
+    : isFallback
+    ? { bg: 'rgba(192,57,43,0.10)', color: '#c0392b', border: 'rgba(192,57,43,0.20)', dot: '#c0392b' }
+    : { bg: 'rgba(74,96,96,0.08)',  color: '#4a6060', border: 'rgba(74,96,96,0.16)',  dot: '#8da8a8' };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-base font-semibold text-gray-900">Ingestion pipeline</h1>
-        <span className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${statusPill}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${statusDot}`} />
+    <div className="space-y-5">
+      {/* Page header */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(91,164,207,0.12)' }}>
+              <Network style={{ width: '16px', height: '16px', color: '#5BA4CF' }} />
+            </div>
+            <h1 className="text-2xl font-bold" style={{ color: '#0f2626', fontFamily: 'Manrope, sans-serif', letterSpacing: '-0.01em' }}>
+              Live Intelligence Hub
+            </h1>
+          </div>
+          <p className="text-sm pl-10" style={{ color: '#4a6060' }}>
+            Platform connectors, pipeline stages, Kafka streaming, and live ML classification feed
+          </p>
+        </div>
+        <span
+          className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl flex-shrink-0"
+          style={{ background: statusChip.bg, color: statusChip.color, border: `1px solid ${statusChip.border}` }}
+        >
+          <span className="w-1.5 h-1.5 rounded-full" style={{ background: statusChip.dot }} />
           {status}
         </span>
       </div>
 
       {isError && <ErrorBanner message="Failed to load pipeline status." />}
 
-      {/* ── Degraded explanation ─────────────────────────────────────────────
-          'degraded' fires when the ML service health probe times out in the
-          2-second window. On HuggingFace free-tier this is normal at cold-start
-          — the space needs 15–30 seconds to wake from sleep. The circuit breaker
-          being CLOSED confirms no requests have actually failed yet.
-      ─────────────────────────────────────────────────────────────────────── */}
+      {/* Status banners */}
       {isDegraded && (
-        <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
-          <Clock className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-amber-600" />
-          <div>
-            <strong>ML service waking up</strong> — the HuggingFace Space is cold-starting
-            (free-tier spaces sleep after inactivity). The 2-second health probe timed out
-            before the service responded, so the pipeline shows <em>degraded</em>.
-            This resolves automatically within 15–30 seconds. The circuit breaker
-            is <strong>{circuitState}</strong> — no requests have failed yet.
+        <div className="flex items-start gap-3 p-4 rounded-xl" style={{ background: 'rgba(217,119,6,0.07)', border: '1px solid rgba(217,119,6,0.18)' }}>
+          <Clock className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: '#d97706' }} />
+          <div className="text-xs" style={{ color: '#b45309' }}>
+            <strong>ML service waking up</strong> — the HuggingFace Space is cold-starting. The 2-second health probe timed out. This resolves in 15–30 seconds. Circuit breaker: <strong>{circuitState}</strong>
           </div>
         </div>
       )}
-
       {isFallback && (
-        <div className="flex items-start gap-2.5 p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-800">
-          <AlertCircle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-red-500" />
-          <div>
-            <strong>Circuit breaker OPEN</strong> — the ML service has failed enough
-            requests to trip the breaker. Posts are still ingested; classifications
-            are queued to the HITL queue for manual review. The breaker resets after
-            60 seconds and will probe automatically.
+        <div className="flex items-start gap-3 p-4 rounded-xl" style={{ background: 'rgba(192,57,43,0.07)', border: '1px solid rgba(192,57,43,0.18)' }}>
+          <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: '#c0392b' }} />
+          <div className="text-xs" style={{ color: '#b03325' }}>
+            <strong>Circuit breaker OPEN</strong> — ML service failed threshold. Posts still ingested; classifications queued to HITL for manual review. Breaker resets after 60 seconds.
           </div>
         </div>
       )}
-
       {isMock && (
-        <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
-          <AlertCircle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-amber-500" />
-          <strong>Mock mode active</strong> — ML_MOCK_MODE=true in .env.
-          Set ML_MOCK_MODE=false and restart to use the live HuggingFace model.
+        <div className="flex items-start gap-3 p-4 rounded-xl" style={{ background: 'rgba(217,119,6,0.07)', border: '1px solid rgba(217,119,6,0.18)' }}>
+          <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: '#d97706' }} />
+          <p className="text-xs" style={{ color: '#b45309' }}>
+            <strong>Mock mode active</strong> — ML_MOCK_MODE=true in .env. Set ML_MOCK_MODE=false and restart to use the live HuggingFace model.
+          </p>
         </div>
       )}
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-        <StatCard label="Active connectors" value={`${activeConnectors} / ${totalConnectors}`} icon={Wifi}        color="green"  />
-        <StatCard label="Events / min"       value={totalEPM.toLocaleString()}                  icon={Activity}    color="indigo" />
-        <StatCard label="Kafka lag"          value={kafka ? `${kafka.kafkaLagMs}ms` : '—'}      icon={Network}     color="yellow" />
-        <StatCard label="Dedup rate"         value={kafka ? `${(kafka.dedupRate * 100).toFixed(1)}%` : '—'} icon={CheckCircle} color="green" />
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard label="Active Connectors" value={`${activeConnectors} / ${totalConnectors}`} icon={Wifi}        color="teal"  />
+        <StatCard label="Events / min"       value={totalEPM.toLocaleString()}                  icon={Activity}    color="ocean" />
+        <StatCard label="Kafka Lag"          value={kafka ? `${kafka.kafkaLagMs}ms` : '—'}      icon={Network}     color="peach" />
+        <StatCard label="Dedup Rate"         value={kafka ? `${(kafka.dedupRate * 100).toFixed(1)}%` : '—'} icon={CheckCircle} color="mauve" />
       </div>
 
-      {/* Pipeline stages */}
-      <div className="glass-card p-4">
-        <h2 className="text-xs font-semibold text-gray-700 mb-4">Pipeline stages</h2>
-        <div className="flex items-start overflow-x-auto pb-2">
+      {/* Pipeline stage visualizer */}
+      <div className="glass-card p-5">
+        <div className="flex items-center gap-2 mb-5">
+          <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#00897b' }} />
+          <h2 className="label-caps text-[#4a6060]">Pipeline Stages</h2>
+        </div>
+        <div className="flex items-start overflow-x-auto pb-2 gap-0">
           {PIPELINE_STAGES.map((stage, i) => (
             <div key={stage.id} className="flex items-start flex-shrink-0">
-              <div className="flex flex-col items-center w-32">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${stageClass(stage.id)}`}>
+              <div className="flex flex-col items-center w-36">
+                <div
+                  className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold shadow-sm"
+                  style={stageStyle(stage.id)}
+                >
                   {stage.id}
                 </div>
-                <p className="text-xs font-semibold text-gray-800 mt-1.5 text-center">{stage.label}</p>
-                <p className="text-[10px] text-gray-500 mt-0.5 text-center leading-snug">{stage.desc}</p>
+                <p className="text-xs font-semibold mt-2 text-center" style={{ color: '#0f2626' }}>{stage.label}</p>
+                <p className="text-[10px] mt-1 text-center leading-snug max-w-[120px]" style={{ color: '#8da8a8' }}>{stage.desc}</p>
               </div>
               {i < PIPELINE_STAGES.length - 1 && (
-                <div className="flex-shrink-0 mt-3.5 mx-1">
-                  <div className="w-6 h-0.5 bg-gray-200" />
+                <div className="flex-shrink-0 mt-4">
+                  <ChevronRight className="h-4 w-4" style={{ color: 'rgba(13,61,61,0.25)' }} />
                 </div>
               )}
             </div>
@@ -217,87 +195,86 @@ export default function IngestionPipeline() {
       </div>
 
       {/* Connectors + ML panel */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-        {/* Connectors table */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Connector status cards */}
         <div className="glass-card overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100">
-            <h2 className="text-xs font-semibold text-gray-700">Connector status</h2>
+          <div className="px-5 py-3.5 flex items-center gap-2" style={{ borderBottom: '1px solid rgba(13,61,61,0.08)' }}>
+            <Wifi className="h-3.5 w-3.5" style={{ color: '#4a6060' }} />
+            <h2 className="label-caps text-[#4a6060]">Connector Status</h2>
           </div>
-          {loadingConnectors ? <FullPageSpinner /> : (
-            <table className="w-full text-xs">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-500 uppercase tracking-wide text-[10px]">Source</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-500 uppercase tracking-wide text-[10px]">Status</th>
-                  <th className="px-3 py-2 text-right font-semibold text-gray-500 uppercase tracking-wide text-[10px]">Ev/min</th>
-                  <th className="px-3 py-2 text-right font-semibold text-gray-500 uppercase tracking-wide text-[10px]">Err%</th>
-                  <th className="px-3 py-2 text-right font-semibold text-gray-500 uppercase tracking-wide text-[10px]">Last event</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {(connectors ?? []).map((c) => {
-                  // FIX: fall back to not_integrated style rather than 'down' (red) for
-                  // connectors whose status isn't in STATUS_META
-                  const meta = STATUS_META[c.status] ?? STATUS_META.not_integrated;
-                  return (
-                    <tr key={c.platform} className="hover:bg-gray-50">
-                      <td className="px-3 py-2.5">
-                        <span className="font-medium text-gray-800">{c.name}</span>
-                        {c.note && (
-                          <span className="block text-[10px] text-gray-400 mt-0.5">{c.note}</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${meta.bg} ${meta.color}`}>
-                          <meta.Icon className="h-3 w-3" /> {meta.label}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2.5 text-right text-gray-600">{c.eventsPerMin.toLocaleString()}</td>
-                      <td className="px-3 py-2.5 text-right text-gray-600">{(c.errorRate * 100).toFixed(1)}%</td>
-                      {/* FIX: formatRel now returns '—' for empty string instead of 'NaNh ago' */}
-                      <td className="px-3 py-2.5 text-right text-gray-400">{formatRel(c.lastEventAt)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          {loadingConnectors ? <div className="p-8"><FullPageSpinner /></div> : (
+            <div className="overflow-x-auto">
+              <table className="data-table w-full">
+                <thead>
+                  <tr>
+                    <th>Source</th>
+                    <th>Status</th>
+                    <th className="text-right">Ev/min</th>
+                    <th className="text-right">Err%</th>
+                    <th className="text-right">Last Event</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(connectors ?? []).map((c) => {
+                    const meta = STATUS_META[c.status] ?? STATUS_META.not_integrated;
+                    return (
+                      <tr key={c.platform}>
+                        <td>
+                          <p className="font-semibold" style={{ color: '#0f2626' }}>{c.name}</p>
+                          {c.note && <p className="text-[10px] mt-0.5" style={{ color: '#8da8a8' }}>{c.note}</p>}
+                        </td>
+                        <td>
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold"
+                            style={{ background: meta.bg, color: meta.color, border: `1px solid ${meta.border}` }}
+                          >
+                            <meta.Icon className="h-3 w-3" /> {meta.label}
+                          </span>
+                        </td>
+                        <td className="text-right tabular-nums" style={{ color: '#4a6060' }}>{c.eventsPerMin.toLocaleString()}</td>
+                        <td className="text-right tabular-nums" style={{ color: '#4a6060' }}>{(c.errorRate * 100).toFixed(1)}%</td>
+                        <td className="text-right tabular-nums" style={{ color: '#8da8a8' }}>{formatRel(c.lastEventAt)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
 
-        <div className="space-y-4">
-          {/* ML service circuit breaker */}
-          <div className="glass-card p-4">
-            <h2 className="text-xs font-semibold text-gray-700 mb-3">ML service circuit breaker</h2>
-            <div className="flex items-center gap-3">
-              <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold flex-shrink-0 ${
-                circuitState === 'CLOSED'    ? 'bg-emerald-100 text-emerald-700' :
-                circuitState === 'HALF_OPEN' ? 'bg-amber-100   text-amber-700'  :
-                                               'bg-red-100     text-red-700'
-              }`}>
+        <div className="space-y-5">
+          {/* Circuit breaker */}
+          <div className="glass-card p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Activity className="h-3.5 w-3.5" style={{ color: '#4a6060' }} />
+              <h2 className="label-caps text-[#4a6060]">ML Service Circuit Breaker</h2>
+            </div>
+            <div className="flex items-center gap-4">
+              <div
+                className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-bold flex-shrink-0"
+                style={{
+                  background: circuitState === 'CLOSED' ? 'rgba(0,137,123,0.12)' : circuitState === 'HALF_OPEN' ? 'rgba(217,119,6,0.12)' : 'rgba(192,57,43,0.12)',
+                  color:      circuitState === 'CLOSED' ? '#00897b'              : circuitState === 'HALF_OPEN' ? '#d97706'              : '#c0392b',
+                  border:     `1px solid ${circuitState === 'CLOSED' ? 'rgba(0,137,123,0.20)' : circuitState === 'HALF_OPEN' ? 'rgba(217,119,6,0.20)' : 'rgba(192,57,43,0.20)'}`,
+                }}
+              >
                 {circuitState === 'CLOSED' ? '●' : circuitState === 'HALF_OPEN' ? '◑' : '○'}
               </div>
               <div>
-                <p className="text-sm font-semibold text-gray-800">{circuitState}</p>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {circuitState === 'CLOSED'
-                    ? 'ML service healthy — all requests passing through'
-                    : circuitState === 'HALF_OPEN'
-                    ? 'Probing — limited requests allowed to test recovery'
-                    : 'Circuit open — fallback classifier active'}
+                <p className="text-sm font-semibold" style={{ color: '#0f2626' }}>{circuitState}</p>
+                <p className="text-xs mt-0.5" style={{ color: '#4a6060' }}>
+                  {circuitState === 'CLOSED'    ? 'ML service healthy — all requests passing through'
+                   : circuitState === 'HALF_OPEN' ? 'Probing — limited requests allowed to test recovery'
+                   : 'Circuit open — fallback classifier active'}
                 </p>
                 {pipeline?.mlService && (
-                  <p className="text-[11px] text-gray-400 mt-0.5">
-                    {/* FIX: show '— (waking up)' instead of literal 'unknown' */}
-                    Model: {modelVersion && modelVersion !== 'unknown'
-                      ? modelVersion
-                      : isDegraded
-                      ? '— (waking up)'
-                      : '—'}
+                  <p className="text-[11px] mt-1" style={{ color: '#8da8a8' }}>
+                    Model: {modelVersion && modelVersion !== 'unknown' ? modelVersion : isDegraded ? '— (waking up)' : '—'}
                   </p>
                 )}
                 {pipeline?.mlService?.lastHealthError && (
-                  <p className="text-[11px] text-amber-600 mt-0.5 font-mono">
+                  <p className="text-[11px] mt-0.5 font-mono" style={{ color: '#d97706' }}>
                     {pipeline.mlService.lastHealthError}
                   </p>
                 )}
@@ -307,39 +284,33 @@ export default function IngestionPipeline() {
 
           {/* Kafka topics */}
           <div className="glass-card overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100">
-              <h2 className="text-xs font-semibold text-gray-700">Kafka topics</h2>
+            <div className="px-5 py-3 flex items-center gap-2" style={{ borderBottom: '1px solid rgba(13,61,61,0.08)' }}>
+              <Network className="h-3.5 w-3.5" style={{ color: '#4a6060' }} />
+              <h2 className="label-caps text-[#4a6060]">Kafka Topics</h2>
             </div>
-            {/* FIX: show a Phase 2 note instead of an empty table when Kafka is disabled */}
             {kafka?.enabled === false ? (
-              <div className="px-4 py-6 text-center">
-                <p className="text-xs font-medium text-gray-500">Kafka disabled</p>
-                <p className="text-[11px] text-gray-400 mt-1">
-                  Set KAFKA_ENABLED=true in .env to enable streaming (Phase 2).
-                </p>
+              <div className="px-5 py-5 text-center">
+                <p className="text-xs font-semibold" style={{ color: '#4a6060' }}>Kafka disabled</p>
+                <p className="text-[11px] mt-1" style={{ color: '#8da8a8' }}>Set KAFKA_ENABLED=true in .env to enable streaming.</p>
               </div>
             ) : (
-              <table className="w-full text-xs">
-                <thead className="bg-gray-50">
+              <table className="data-table w-full">
+                <thead>
                   <tr>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-500 uppercase tracking-wide text-[10px]">Topic</th>
-                    <th className="px-3 py-2 text-right font-semibold text-gray-500 uppercase tracking-wide text-[10px]">Partitions</th>
-                    <th className="px-3 py-2 text-right font-semibold text-gray-500 uppercase tracking-wide text-[10px]">Consumer lag</th>
+                    <th>Topic</th>
+                    <th className="text-right w-20">Partitions</th>
+                    <th className="text-right w-24">Consumer Lag</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody>
                   {(kafka?.topics ?? []).length === 0 ? (
-                    <tr>
-                      <td colSpan={3} className="px-3 py-4 text-center text-[11px] text-gray-400">
-                        No topics — Kafka connected but no topics produced yet.
-                      </td>
-                    </tr>
+                    <tr><td colSpan={3} className="text-center py-4" style={{ color: '#8da8a8' }}>No topics — Kafka connected but no topics produced yet.</td></tr>
                   ) : (kafka?.topics ?? []).map((t) => (
-                    <tr key={t.name} className="hover:bg-gray-50">
-                      <td className="px-3 py-2.5 font-mono text-gray-700 text-[11px]">{t.name}</td>
-                      <td className="px-3 py-2.5 text-right text-gray-600">{t.partitions}</td>
-                      <td className="px-3 py-2.5 text-right">
-                        <span className={t.lag > 1000 ? 'text-amber-600 font-medium' : 'text-gray-600'}>
+                    <tr key={t.name}>
+                      <td className="font-mono text-[11px]" style={{ color: '#0f2626' }}>{t.name}</td>
+                      <td className="text-right tabular-nums" style={{ color: '#4a6060' }}>{t.partitions}</td>
+                      <td className="text-right">
+                        <span className="tabular-nums font-semibold" style={{ color: t.lag > 1000 ? '#d97706' : '#4a6060' }}>
                           {t.lag.toLocaleString()}
                         </span>
                       </td>
@@ -352,62 +323,65 @@ export default function IngestionPipeline() {
         </div>
       </div>
 
-      {/* ── Live ML Feed ──────────────────────────────────────────────────────── */}
+      {/* Live ML Feed */}
       <div className="glass-card overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+        <div className="px-5 py-3.5 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(13,61,61,0.08)' }}>
           <div className="flex items-center gap-2">
-            <Radio className="h-3.5 w-3.5 text-emerald-600" />
-            <h2 className="text-xs font-semibold text-gray-700">Live ML Feed</h2>
-            <span className="text-[10px] text-gray-400">Bluesky + YouTube · auto-classified 24/7</span>
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60" style={{ background: '#00897b' }} />
+              <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: '#00897b' }} />
+            </span>
+            <Radio className="h-3.5 w-3.5" style={{ color: '#00897b' }} />
+            <h2 className="label-caps text-[#4a6060]">Live ML Feed</h2>
+            <span className="text-[10px]" style={{ color: '#8da8a8' }}>Bluesky + YouTube · auto-classified 24/7</span>
           </div>
           {recentFeed && (
-            <span className="text-[10px] text-gray-400">
+            <span className="text-[11px] tabular-nums" style={{ color: '#8da8a8' }}>
               {recentFeed.total_since_start.toLocaleString()} total since service start
             </span>
           )}
         </div>
 
         {!recentFeed ? (
-          <div className="px-4 py-6 text-center text-xs text-gray-400">Loading live feed…</div>
+          <div className="px-5 py-8 text-center text-xs" style={{ color: '#8da8a8' }}>Loading live feed…</div>
         ) : recentFeed.posts.length === 0 ? (
-          <div className="px-4 py-6 text-center text-xs text-gray-400">No posts yet — feed will populate automatically.</div>
+          <div className="px-5 py-8 text-center text-xs" style={{ color: '#8da8a8' }}>No posts yet — feed will populate automatically.</div>
         ) : (
-          <div className="divide-y divide-gray-50">
+          <div style={{ borderTop: '1px solid rgba(13,61,61,0.04)' }}>
             {recentFeed.posts.slice(0, 20).map((post: RecentPost) => {
               const labelMeta = LABEL_META[post.label] ?? LABEL_META.irrelevant;
-              const platform  = post.platform === 'bluesky' ? 'Bluesky' : 'YouTube';
+              const platChip  = PLATFORM_CHIP[post.platform] ?? { bg: 'rgba(74,96,96,0.08)', color: '#4a6060' };
               const lang      = post.language ? (LANG_LABELS[post.language] ?? post.language) : '—';
               const confPct   = Math.round(post.confidence * 100);
 
               return (
-                <div key={post.post_id} className="flex items-start gap-3 px-4 py-2.5 hover:bg-gray-50">
-                  {/* Platform pill */}
-                  <span className={`flex-shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded mt-0.5 ${
-                    post.platform === 'bluesky'
-                      ? 'bg-sky-100 text-sky-700'
-                      : 'bg-red-100 text-red-700'
-                  }`}>
-                    {platform}
+                <div
+                  key={post.post_id}
+                  className="flex items-start gap-3 px-5 py-3 transition-colors"
+                  style={{ borderBottom: '1px solid rgba(13,61,61,0.04)' }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(13,61,61,0.025)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                >
+                  <span
+                    className="flex-shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-md mt-0.5"
+                    style={{ background: platChip.bg, color: platChip.color }}
+                  >
+                    {post.platform === 'bluesky' ? 'Bluesky' : 'YouTube'}
                   </span>
 
-                  {/* Content */}
-                  <p className="flex-1 text-xs text-gray-700 leading-relaxed min-w-0 line-clamp-2">
+                  <p className="flex-1 text-xs leading-relaxed min-w-0 line-clamp-2" style={{ color: '#0f2626' }}>
                     {post.content_snippet}
                   </p>
 
-                  {/* Metadata */}
                   <div className="flex-shrink-0 flex items-center gap-2 text-[10px]">
-                    <span className={`px-1.5 py-0.5 rounded font-medium ${labelMeta.color}`}>
+                    <span className={`px-1.5 py-0.5 rounded-md font-semibold ${labelMeta.color}`}>
                       {labelMeta.label}
                     </span>
-                    <span className={`font-mono font-semibold ${
-                      confPct >= 85 ? 'text-red-600' :
-                      confPct >= 70 ? 'text-amber-600' : 'text-gray-500'
-                    }`}>
+                    <span className="font-bold tabular-nums" style={{ color: confPct >= 85 ? '#c0392b' : confPct >= 70 ? '#d97706' : '#4a6060' }}>
                       {confPct}%
                     </span>
-                    <span className="text-gray-400 hidden sm:inline">{lang}</span>
-                    <span className="text-gray-300">{formatRelative(post.classified_at)}</span>
+                    <span className="hidden sm:inline" style={{ color: '#8da8a8' }}>{lang}</span>
+                    <span className="tabular-nums" style={{ color: '#8da8a8' }}>{formatRelative(post.classified_at)}</span>
                   </div>
                 </div>
               );

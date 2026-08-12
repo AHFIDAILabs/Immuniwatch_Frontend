@@ -1,41 +1,62 @@
 import { useState, useRef, useEffect } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
-import { Bell, Menu } from 'lucide-react';
+import { Outlet, useLocation, useNavigate, Link } from 'react-router-dom';
+import { Bell, Menu, Home, ChevronRight } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { alertsApi } from '../api/alerts';
 import { Sidebar } from './Sidebar';
 import { ErrorBoundary } from './ErrorBoundary';
+import type { Alert, AlertTriggerType } from '../types/api';
 
 const PAGE_TITLES: Record<string, string> = {
-  '/dashboard':         'Overview',
-  '/hitl':              'HITL Review',
-  '/posts':             'Live post feed',
-  '/dispatch':          'Response dispatch',
-  '/trends':            'Trend analysis',
-  '/knowledge-base':    'Knowledge base',
-  '/ingestion':         'Ingestion pipeline',
-  '/model-health':      'Model health',
-  '/audit-log':         'Audit log',
-  '/users':             'User management',
-  '/settings':          'Settings',
+  '/dashboard':         'Analyst Intelligence Hub',
+  '/hitl':              'HITL Review Queue',
+  '/posts':             'Live Post Feed',
+  '/dispatch':          'Response Dispatch',
+  '/trends':            'Trend Analysis',
+  '/knowledge-base':    'Knowledge Base',
+  '/ingestion':         'Ingestion Pipeline',
+  '/model-health':      'Model Health & Training',
+  '/audit-log':         'System Audit Log',
+  '/users':             'User & Access Control',
+  '/settings':          'Platform Settings',
   '/alerts':            'Alerts',
   '/organizations':     'Organizations',
-  '/platform/overview': 'Platform overview',
+  '/platform/overview': 'Surveillance Command',
+  '/geo-surge':         'Geospatial Surge Coordinator',
 };
 
-const NOTIFICATIONS = [
-  { id: 1, color: 'bg-red-500',    text: 'Surge detected: "Jigi ta causes infertility" — 247 posts in 2 hrs (Hausa)', time: '2 min ago' },
-  { id: 2, color: 'bg-red-500',    text: 'Coordinated cluster: OPV-polio link campaign on Facebook (Pidgin)', time: '19 min ago' },
-  { id: 3, color: 'bg-amber-500',  text: 'Model drift: Yoruba PSI = 0.22 — retraining recommended', time: '1 hr ago' },
-  { id: 4, color: 'bg-blue-500',   text: '14 posts escalated to high-priority HITL queue', time: '2 hr ago' },
-  { id: 5, color: 'bg-emerald-500',text: 'Monthly model retraining completed — macro-F1 improved to 0.847', time: '3 hr ago' },
-];
+const TRIGGER_ROUTE: Record<AlertTriggerType, string> = {
+  surge:           '/geo-surge',
+  psi_drift:       '/model-health',
+  model_update:    '/model-health',
+  connector_error: '/ingestion',
+  override_rate:   '/audit-log',
+};
+
+const SEVERITY_COLOR: Record<string, string> = {
+  high:   '#c0392b',
+  medium: '#d97706',
+  low:    '#00897b',
+  info:   '#5BA4CF',
+};
+
+function relTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1)  return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs  < 24) return `${hrs} hr ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
 
 export function Layout() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen,   setNotifOpen]   = useState(false);
-  const [readIds,     setReadIds]     = useState<Set<number>>(() => new Set());
+  const [readIds,     setReadIds]     = useState<Set<string>>(() => new Set());
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -48,8 +69,7 @@ export function Layout() {
 
   useEffect(() => { setNotifOpen(false); }, [location.pathname]);
 
-  const title  = PAGE_TITLES[location.pathname] ?? 'Overview';
-  const unread = NOTIFICATIONS.filter((n) => !readIds.has(n.id)).length;
+  const title = PAGE_TITLES[location.pathname] ?? 'Overview';
 
   const { data: liveStats } = useQuery({
     queryKey: ['stats', 'live'],
@@ -58,82 +78,187 @@ export function Layout() {
     staleTime:       30_000,
   });
 
+  const { data: alertsPage } = useQuery({
+    queryKey: ['notifications', 'live'],
+    queryFn:  () => alertsApi.list({ page: 1, limit: 10, resolved: false }),
+    refetchInterval: 60_000,
+    staleTime:       30_000,
+  });
+
+  const notifications: Alert[] = alertsPage?.data ?? [];
+  const unread = notifications.filter((n) => !readIds.has(n._id)).length;
+
+  function handleNotifClick(alert: Alert) {
+    setReadIds((prev) => new Set([...prev, alert._id]));
+    setNotifOpen(false);
+    navigate(TRIGGER_ROUTE[alert.triggerType] ?? '/alerts');
+  }
+
+  function markAllRead() {
+    setReadIds(new Set(notifications.map((n) => n._id)));
+  }
+
   return (
     <div className="flex h-screen app-bg overflow-hidden">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        {/* Topbar */}
-        <header className="h-12 glass-topbar flex items-center px-3 md:px-5 gap-2 md:gap-3 flex-shrink-0 z-10">
+
+        {/* ── Topbar ── */}
+        <header className="glass-topbar flex items-center px-4 md:px-6 gap-3 flex-shrink-0 z-10" style={{ height: '64px' }}>
 
           {/* Hamburger — mobile only */}
           <button
             onClick={() => setSidebarOpen(true)}
-            className="md:hidden p-1.5 rounded-md text-gray-500 hover:text-gray-700 hover:bg-white/60 transition-colors flex-shrink-0"
+            className="md:hidden p-2 rounded-md transition-colors flex-shrink-0"
+            style={{ color: '#404848' }}
             aria-label="Open navigation"
           >
             <Menu className="h-5 w-5" />
           </button>
 
-          <span className="text-sm font-semibold text-gray-900 flex-1 truncate">{title}</span>
-
-          {/* Live indicator */}
-          <div className="hidden sm:flex items-center gap-1.5 flex-shrink-0">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-            </span>
-            <span className="text-xs text-gray-500 whitespace-nowrap">
-              {liveStats ? `${liveStats.postsLastHour.toLocaleString()}/hr` : 'Live'}
+          {/* Page title */}
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            <span className="text-sm font-semibold truncate" style={{ fontFamily: 'Manrope, sans-serif', color: '#1a1c1c' }}>
+              {title}
             </span>
           </div>
+
+          {/* Live indicator */}
+          <div
+            className="hidden sm:flex items-center gap-2 flex-shrink-0 px-3 py-1.5 rounded-full"
+            style={{ background: 'rgba(0,107,95,0.08)', border: '1px solid rgba(0,107,95,0.15)' }}
+          >
+            <span className="relative flex" style={{ width: '8px', height: '8px' }}>
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60" style={{ background: '#00897b' }} />
+              <span className="relative inline-flex rounded-full h-full w-full" style={{ background: '#00897b' }} />
+            </span>
+            <span className="text-xs font-semibold" style={{ color: '#00897b', fontFamily: '"Plus Jakarta Sans", sans-serif' }}>
+              {liveStats ? `${liveStats.postsLastHour.toLocaleString()} / hr` : 'Live'}
+            </span>
+          </div>
+
+          {/* Home link */}
+          <Link
+            to="/"
+            title="Landing page"
+            className="hidden sm:flex w-9 h-9 rounded-md items-center justify-center transition-colors flex-shrink-0"
+            style={{ color: '#707978' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#f4f3f2'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+          >
+            <Home style={{ width: '16px', height: '16px' }} />
+          </Link>
 
           {/* Notification bell */}
           <div className="relative flex-shrink-0" ref={panelRef}>
             <button
               onClick={() => setNotifOpen((o) => !o)}
-              className="relative w-8 h-8 rounded-md glass-card flex items-center justify-center hover:bg-white/90 transition-colors"
+              className="relative w-9 h-9 rounded-md flex items-center justify-center transition-colors"
+              style={{ background: notifOpen ? '#f4f3f2' : 'transparent', color: '#404848' }}
+              onMouseEnter={(e) => { if (!notifOpen) (e.currentTarget as HTMLElement).style.background = '#f4f3f2'; }}
+              onMouseLeave={(e) => { if (!notifOpen) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
               aria-label="Notifications"
             >
-              <Bell className="h-4 w-4 text-gray-500" />
+              <Bell style={{ width: '18px', height: '18px' }} />
               {unread > 0 && (
-                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500 border-2 border-white" />
+                <span
+                  className="absolute"
+                  style={{
+                    top: '6px', right: '6px', width: '8px', height: '8px',
+                    borderRadius: '50%', background: '#ba1a1a', border: '2px solid #fff',
+                  }}
+                />
               )}
             </button>
 
             {notifOpen && (
-              <div className="absolute top-10 right-0 w-[min(calc(100vw-1rem),20rem)] glass-dropdown rounded-xl z-50 shadow-xl">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-white/40">
-                  <span className="text-sm font-semibold text-gray-900">
-                    Notifications{' '}
-                    {unread > 0 && <span className="ml-1 text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded-full">{unread}</span>}
-                  </span>
-                  <button onClick={() => setReadIds(new Set(NOTIFICATIONS.map((n) => n.id)))}
-                    className="text-xs text-emerald-600 hover:text-emerald-800">
+              <div
+                className="absolute right-0 glass-dropdown animate-slide-in overflow-hidden"
+                style={{ top: '52px', width: 'min(calc(100vw - 1rem), 22rem)', zIndex: 50 }}
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: '1px solid #e9e8e7' }}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold" style={{ color: '#1a1c1c' }}>Notifications</span>
+                    {unread > 0 && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                        style={{ background: '#ba1a1a', color: '#fff' }}>{unread}</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={markAllRead}
+                    className="text-xs font-semibold"
+                    style={{ color: '#00897b' }}
+                  >
                     Mark all read
                   </button>
                 </div>
-                <div className="divide-y divide-white/40 max-h-72 overflow-y-auto">
-                  {NOTIFICATIONS.map((n) => (
-                    <div key={n.id}
-                      onClick={() => setReadIds((prev) => new Set([...prev, n.id]))}
-                      className={`flex gap-3 px-4 py-3 cursor-pointer hover:bg-white/40 transition-colors ${!readIds.has(n.id) ? 'bg-emerald-50/50' : ''}`}>
-                      <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1 ${n.color}`} />
-                      <div className="min-w-0">
-                        <p className="text-xs text-gray-800 leading-snug">{n.text}</p>
-                        <time className="text-[10px] text-gray-400 mt-0.5 block">{n.time}</time>
-                      </div>
+
+                {/* List */}
+                <div className="max-h-72 overflow-y-auto scrollbar-thin">
+                  {notifications.length === 0 ? (
+                    <div className="px-5 py-8 text-center">
+                      <p className="text-sm" style={{ color: '#707978' }}>No active alerts</p>
                     </div>
-                  ))}
+                  ) : (
+                    notifications.map((n) => {
+                      const isRead = readIds.has(n._id);
+                      return (
+                        <div
+                          key={n._id}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => handleNotifClick(n)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleNotifClick(n)}
+                          className="flex gap-3 px-5 py-3.5 cursor-pointer"
+                          style={{
+                            borderBottom: '1px solid #f4f3f2',
+                            background: isRead ? 'transparent' : 'rgba(0,107,95,0.04)',
+                          }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#f7f6f5'; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = isRead ? 'transparent' : 'rgba(0,107,95,0.04)'; }}
+                        >
+                          <span
+                            className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5"
+                            style={{ background: SEVERITY_COLOR[n.severity] ?? '#707978' }}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-medium leading-snug" style={{ color: '#1a1c1c' }}>{n.title}</p>
+                            <p className="text-[11px] leading-snug mt-0.5" style={{ color: '#404848', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                              {n.message}
+                            </p>
+                            <time className="text-[10px] mt-1 block" style={{ color: '#707978' }}>
+                              {relTime(n.createdAt)}
+                            </time>
+                          </div>
+                          <ChevronRight style={{ width: '14px', height: '14px', color: '#c9c8c7', flexShrink: 0, marginTop: '2px' }} />
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
-                <div className="px-4 py-2 text-center text-[11px] text-gray-400 border-t border-white/40">No older notifications</div>
+
+                {/* Footer */}
+                <div
+                  className="px-5 py-3 text-center text-[11px] font-semibold cursor-pointer transition-colors"
+                  style={{ color: '#00897b', borderTop: '1px solid #e9e8e7' }}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => { setNotifOpen(false); navigate('/alerts'); }}
+                  onKeyDown={(e) => e.key === 'Enter' && (setNotifOpen(false), navigate('/alerts'))}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#005048'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#00897b'; }}
+                >
+                  View all alerts →
+                </div>
               </div>
             )}
           </div>
         </header>
 
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-3 md:p-5">
+        {/* ── Page content ── */}
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 scrollbar-thin">
           <ErrorBoundary scope={title}>
             <Outlet />
           </ErrorBoundary>

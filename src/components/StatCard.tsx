@@ -1,50 +1,50 @@
 import type { LucideIcon } from 'lucide-react';
 
 interface StatCardProps {
-  label: string;
-  value: string | number;
-  sub?: string;
-  icon?: LucideIcon;
-  trend?: { value: number; label: string };
-  color?: 'indigo' | 'green' | 'emerald' | 'red' | 'yellow' | 'blue';
+  label:    string;
+  value:    string | number;
+  sub?:     string;
+  icon?:    LucideIcon;
+  trend?:   { value: number; label: string };
+  color?:   'teal' | 'peach' | 'mauve' | 'ocean' | 'red' | 'yellow' | 'blue' | 'indigo' | 'green' | 'emerald';
+  accent?:  string; // override icon bg color directly
 }
 
-const ICON_MAP = {
-  indigo:  'bg-indigo-100/80 text-indigo-600',
-  green:   'bg-green-100/80 text-green-600',
-  emerald: 'bg-emerald-100/80 text-emerald-600',
-  red:     'bg-red-100/80 text-red-600',
-  yellow:  'bg-yellow-100/80 text-yellow-600',
-  blue:    'bg-blue-100/80 text-blue-600',
+const ICON_STYLE: Record<string, { bg: string; color: string }> = {
+  teal:    { bg: 'rgba(0,137,123,0.12)',  color: '#00897b' },
+  peach:   { bg: 'rgba(244,162,97,0.15)', color: '#c25b0a' },
+  mauve:   { bg: 'rgba(176,139,191,0.15)',color: '#7b4ea0' },
+  ocean:   { bg: 'rgba(91,164,207,0.15)', color: '#1a6fa0' },
+  red:     { bg: 'rgba(192,57,43,0.10)',  color: '#c0392b' },
+  yellow:  { bg: 'rgba(217,119,6,0.12)',  color: '#d97706' },
+  blue:    { bg: 'rgba(37,99,235,0.10)',  color: '#2563eb' },
+  indigo:  { bg: 'rgba(0,137,123,0.12)',  color: '#00897b' },
+  green:   { bg: 'rgba(0,137,123,0.12)',  color: '#00897b' },
+  emerald: { bg: 'rgba(0,137,123,0.12)',  color: '#00897b' },
 };
 
-const TINT_MAP = {
-  indigo:  'from-indigo-50/60 to-white/50',
-  green:   'from-green-50/60 to-white/50',
-  emerald: 'from-emerald-50/60 to-white/50',
-  red:     'from-red-50/60 to-white/50',
-  yellow:  'from-amber-50/60 to-white/50',
-  blue:    'from-blue-50/60 to-white/50',
-};
+export function StatCard({ label, value, sub, icon: Icon, trend, color = 'teal', accent }: StatCardProps) {
+  const style = ICON_STYLE[color] ?? ICON_STYLE.teal;
 
-export function StatCard({ label, value, sub, icon: Icon, trend, color = 'indigo' }: StatCardProps) {
   return (
-    <div className={`glass-card p-5 flex items-start gap-4 bg-gradient-to-br ${TINT_MAP[color]} transition-transform duration-200 hover:-translate-y-0.5`}>
+    <div className="stat-tile group">
       {Icon && (
-        <div className={`flex-shrink-0 rounded-lg p-2.5 ${ICON_MAP[color]}`}>
-          <Icon className="h-5 w-5" />
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center mb-3 transition-transform duration-200 group-hover:scale-105"
+          style={{ background: accent ? `${accent}20` : style.bg }}
+        >
+          <Icon style={{ width: '18px', height: '18px', color: accent ?? style.color }} />
         </div>
       )}
-      <div className="min-w-0 flex-1">
-        <p className="text-xs font-medium text-gray-500 truncate">{label}</p>
-        <p className="mt-1 text-2xl font-semibold text-gray-900 leading-none">{value}</p>
-        {sub && <p className="mt-1 text-xs text-gray-400">{sub}</p>}
-        {trend && (
-          <p className={`mt-1 text-xs font-medium ${trend.value >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {trend.value >= 0 ? '+' : ''}{trend.value}% {trend.label}
-          </p>
-        )}
-      </div>
+      <p className="label-caps text-[#4a6060] truncate mb-1">{label}</p>
+      <p className="text-[1.625rem] font-bold leading-none num-display" style={{ color: '#0f2626' }}>{value}</p>
+      {sub && <p className="mt-1.5 text-[11px] text-[#4a6060]">{sub}</p>}
+      {trend && (
+        <div className={`mt-2 flex items-center gap-1 text-[11px] font-semibold ${trend.value >= 0 ? 'text-[#059669]' : 'text-[#c0392b]'}`}>
+          <span>{trend.value >= 0 ? '↑' : '↓'}</span>
+          <span>{Math.abs(trend.value)}% {trend.label}</span>
+        </div>
+      )}
     </div>
   );
 }

@@ -61,7 +61,7 @@ api.interceptors.response.use(
 
       // Public paths that should never be redirected to login — the page
       // handles unauthenticated state itself (invite / claim / deactivated pages).
-      const PUBLIC_PREFIXES = ['/accept-invite', '/claim-org', '/deactivated', '/submit'];
+      const PUBLIC_PREFIXES = ['/', '/accept-invite', '/claim-org', '/deactivated', '/submit'];
       const isPublic = PUBLIC_PREFIXES.some((p) => path.startsWith(p));
 
       if (code === 'ACCOUNT_DEACTIVATED') {
