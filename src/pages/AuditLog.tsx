@@ -158,7 +158,7 @@ export default function AuditLog() {
                         </td>
                         <td>
                           <span className="text-[11px] font-mono" style={{ color: '#8da8a8' }}>
-                            {entry.resourceId.length > 16 ? `${entry.resourceId.slice(0, 8)}…${entry.resourceId.slice(-4)}` : entry.resourceId}
+                            {entry.resourceId ? (entry.resourceId.length > 16 ? `${entry.resourceId.slice(0, 8)}…${entry.resourceId.slice(-4)}` : entry.resourceId) : '—'}
                           </span>
                         </td>
                         <td className="whitespace-nowrap tabular-nums text-xs" style={{ color: '#8da8a8' }}>
