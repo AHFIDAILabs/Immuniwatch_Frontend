@@ -13,7 +13,7 @@ import { useToast } from "../context/ToastContext";
 import { formatRelative, LANG_FLAGS, LANG_LABELS, PLATFORM_LABELS } from "../lib/utils";
 import type { Post, PostLanguage, PostPlatform } from "../types/api";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 60;
 
 // Confidence bar colors per label
 const CONF_BAR: Record<string, string> = {
@@ -179,8 +179,10 @@ export default function Posts() {
   }
 
   const posts: Post[] = data?.data ?? [];
-  const total = data?.total ?? 0;
+  const total      = data?.total ?? 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
+  const rangeStart = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const rangeEnd   = Math.min(page * PAGE_SIZE, total);
 
   return (
     <div className="space-y-5">
@@ -357,7 +359,7 @@ export default function Posts() {
       {totalPages > 1 && (
         <div className="glass-card px-4 py-3 flex items-center justify-between">
           <span className="text-xs" style={{ color: "#8da8a8" }}>
-            Page {page} of {totalPages} · {total.toLocaleString()} total posts
+            Showing {rangeStart.toLocaleString()}–{rangeEnd.toLocaleString()} of {total.toLocaleString()} posts · Page {page} of {totalPages}
           </span>
           <div className="flex gap-2">
             <button
