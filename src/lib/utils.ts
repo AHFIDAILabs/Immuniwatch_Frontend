@@ -56,7 +56,7 @@ export const LANG_LABELS: Record<PostLanguage, string> = {
 
 export const PLATFORM_LABELS: Record<PostPlatform, string> = {
   twitter: 'Twitter/X', facebook: 'Facebook', youtube: 'YouTube',
-  bluesky: 'Bluesky',   submission: 'Submission',
+  bluesky: 'Bluesky',   instagram: 'Instagram', submission: 'Submission',
 };
 
 export const ROLE_LABELS: Record<UserRole, string> = {

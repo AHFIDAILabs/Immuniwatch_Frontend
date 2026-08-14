@@ -9,7 +9,7 @@ import type { Connector, KafkaHealth } from '../api/pipeline';
 import { StatCard }          from '../components/StatCard';
 import { FullPageSpinner }   from '../components/Spinner';
 import { ErrorBanner }       from '../components/ErrorBanner';
-import { LABEL_META, LANG_LABELS, formatRelative } from '../lib/utils';
+import { LABEL_META, LANG_LABELS, PLATFORM_LABELS, formatRelative } from '../lib/utils';
 import type { RecentPost }   from '../types/api';
 
 // ── Status metadata ────────────────────────────────────────────────────────────
@@ -33,6 +33,10 @@ const PIPELINE_STAGES = [
 const PLATFORM_CHIP: Record<string, { bg: string; color: string }> = {
   bluesky:    { bg: 'rgba(91,164,207,0.12)',  color: '#1a6fa0' },
   youtube:    { bg: 'rgba(192,57,43,0.10)',   color: '#b03325' },
+  twitter:    { bg: 'rgba(37,99,235,0.10)',   color: '#1e40af' },
+  facebook:   { bg: 'rgba(0,137,123,0.10)',   color: '#005048' },
+  instagram:  { bg: 'rgba(176,139,191,0.14)', color: '#7b4ea0' },
+  submission: { bg: 'rgba(74,96,96,0.08)',    color: '#4a6060' },
 };
 
 // FIX: returns '—' for empty strings and invalid dates instead of 'NaNh ago'.
@@ -333,7 +337,7 @@ export default function IngestionPipeline() {
             </span>
             <Radio className="h-3.5 w-3.5" style={{ color: '#00897b' }} />
             <h2 className="label-caps text-[#4a6060]">Live ML Feed</h2>
-            <span className="text-[10px]" style={{ color: '#8da8a8' }}>Bluesky + YouTube · auto-classified 24/7</span>
+            <span className="text-[10px]" style={{ color: '#8da8a8' }}>All platforms · auto-classified 24/7</span>
           </div>
           {recentFeed && (
             <span className="text-[11px] tabular-nums" style={{ color: '#8da8a8' }}>
@@ -366,7 +370,7 @@ export default function IngestionPipeline() {
                     className="flex-shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-md mt-0.5"
                     style={{ background: platChip.bg, color: platChip.color }}
                   >
-                    {post.platform === 'bluesky' ? 'Bluesky' : 'YouTube'}
+                    {PLATFORM_LABELS[post.platform as keyof typeof PLATFORM_LABELS] ?? post.platform}
                   </span>
 
                   <p className="flex-1 text-xs leading-relaxed min-w-0 line-clamp-2" style={{ color: '#0f2626' }}>

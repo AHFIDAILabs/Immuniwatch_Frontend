@@ -29,6 +29,7 @@ const PLATFORM_CHIP: Record<string, { bg: string; color: string }> = {
   youtube:    { bg: "rgba(192,57,43,0.10)",   color: "#b03325" },
   twitter:    { bg: "rgba(37,99,235,0.10)",   color: "#1e40af" },
   facebook:   { bg: "rgba(0,137,123,0.10)",   color: "#005048" },
+  instagram:  { bg: "rgba(176,139,191,0.14)", color: "#7b4ea0" },
   submission: { bg: "rgba(74,96,96,0.08)",    color: "#4a6060" },
 };
 

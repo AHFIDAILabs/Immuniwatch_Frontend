@@ -12,7 +12,7 @@ export type UserRole =
   | "supervisor"
   | "org_admin"
   | "super_admin";
-export type PostPlatform = "twitter" | "facebook" | "youtube" | "bluesky" | "submission";
+export type PostPlatform = "twitter" | "facebook" | "youtube" | "bluesky" | "instagram" | "submission";
 export type PostLanguage = "en" | "pcm" | "ha" | "yo" | "ig";
 export type ClassificationLabel =
   | "misinformation"
