@@ -137,6 +137,7 @@ function DispatchModal({ review, onClose }: { review: HITLReview; onClose: () =>
   const [cnVersions, setCnVersions] = useState<Record<CNVersion, string>>({ short: "", medium: "", long: "" });
   const [done, setDone] = useState(false);
   const [deployedSuccessfully, setDeployedSuccessfully] = useState(false);
+  const [deployedPlatform, setDeployedPlatform] = useState<string | null>(null);
   const platform = post?.platform ?? null;
 
   const { data: cnData, isLoading: cnLoading } = useQuery({
@@ -168,14 +169,18 @@ function DispatchModal({ review, onClose }: { review: HITLReview; onClose: () =>
 
   const { mutate: deploy, isPending: deploying } = useMutation({
     mutationFn: () => dispatchApi.deployCounterNarrative(postId, text),
-    onSuccess: () => {
-      if (platform === "twitter") {
+    onSuccess: (data) => {
+      // Use backend's confirmed platform — more reliable than component-level variable
+      // since review.postId may not always be populated when the modal opens.
+      const confirmedPlatform = data.platform ?? platform;
+      setDeployedPlatform(confirmedPlatform);
+      setDeployedSuccessfully(true);
+      setDone(true);
+      if (confirmedPlatform === "twitter") {
         toast.success("Posted to Twitter/X", "Counter-narrative posted as a reply to the original tweet.");
       } else {
         toast.success("Response saved", `Counter-narrative recorded. Copy and post to ${platformLabel}.`);
       }
-      setDeployedSuccessfully(true);
-      setDone(true);
     },
     onError: () => {
       toast.warning("Saved locally", "Response saved in your records. Copy and post it manually.");
@@ -195,7 +200,7 @@ function DispatchModal({ review, onClose }: { review: HITLReview; onClose: () =>
   }
 
   if (done) {
-    const postedDirectly = deployedSuccessfully && platform === "twitter";
+    const postedDirectly = deployedSuccessfully && deployedPlatform === "twitter";
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-2 p-3 rounded-xl"

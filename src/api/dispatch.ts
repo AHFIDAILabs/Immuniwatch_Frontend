@@ -40,7 +40,7 @@ export const dispatchApi = {
     api.get<CounterNarrativeResult>('/dispatch/counter-narrative', { params: { postId } }).then((r) => r.data),
 
   deployCounterNarrative: (postId: string, approvedText: string) =>
-    api.post<{ success: boolean; message: string }>(`/dispatch/counter-narrative/${postId}/deploy`, { approvedText }).then((r) => r.data),
+    api.post<{ success: boolean; message: string; platform: string | null }>(`/dispatch/counter-narrative/${postId}/deploy`, { approvedText }).then((r) => r.data),
 
   skipCounterNarrative: (postId: string) =>
     api.post<{ success: boolean; message: string }>(`/dispatch/counter-narrative/${postId}/skip`).then((r) => r.data),
