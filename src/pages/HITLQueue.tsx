@@ -136,6 +136,8 @@ function DispatchModal({ review, onClose }: { review: HITLReview; onClose: () =>
   const [cnSource, setCnSource] = useState<"ml" | "groq" | "template" | null>(null);
   const [cnVersions, setCnVersions] = useState<Record<CNVersion, string>>({ short: "", medium: "", long: "" });
   const [done, setDone] = useState(false);
+  const [deployedSuccessfully, setDeployedSuccessfully] = useState(false);
+  const platform = post?.platform ?? null;
 
   const { data: cnData, isLoading: cnLoading } = useQuery({
     queryKey: ["counter-narrative", postId],
@@ -167,11 +169,17 @@ function DispatchModal({ review, onClose }: { review: HITLReview; onClose: () =>
   const { mutate: deploy, isPending: deploying } = useMutation({
     mutationFn: () => dispatchApi.deployCounterNarrative(postId, text),
     onSuccess: () => {
-      toast.success("Response saved", `Counter-narrative recorded. Copy and post to ${platformLabel}.`);
+      if (platform === "twitter") {
+        toast.success("Posted to Twitter/X", "Counter-narrative posted as a reply to the original tweet.");
+      } else {
+        toast.success("Response saved", `Counter-narrative recorded. Copy and post to ${platformLabel}.`);
+      }
+      setDeployedSuccessfully(true);
       setDone(true);
     },
     onError: () => {
-      toast.warning("Saved locally", "Response saved. Copy and post manually.");
+      toast.warning("Saved locally", "Response saved in your records. Copy and post it manually.");
+      setDeployedSuccessfully(false);
       setDone(true);
     },
   });
@@ -187,12 +195,19 @@ function DispatchModal({ review, onClose }: { review: HITLReview; onClose: () =>
   }
 
   if (done) {
+    const postedDirectly = deployedSuccessfully && platform === "twitter";
     return (
       <div className="space-y-4">
-        <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background: "rgba(0,137,123,0.08)", border: "1px solid rgba(0,137,123,0.18)" }}>
-          <CheckCheck className="h-4 w-4 flex-shrink-0" style={{ color: "#00897b" }} />
-          <p className="text-sm" style={{ color: "#005048" }}>
-            Response saved. Copy and post it manually on <strong>{platformLabel}</strong>.
+        <div className="flex items-center gap-2 p-3 rounded-xl"
+          style={{
+            background: postedDirectly ? "rgba(0,137,123,0.10)" : "rgba(244,162,97,0.10)",
+            border: `1px solid ${postedDirectly ? "rgba(0,137,123,0.22)" : "rgba(244,162,97,0.28)"}`,
+          }}>
+          <CheckCheck className="h-4 w-4 flex-shrink-0" style={{ color: postedDirectly ? "#00897b" : "#c97b2a" }} />
+          <p className="text-sm" style={{ color: postedDirectly ? "#005048" : "#7a4a10" }}>
+            {postedDirectly
+              ? <>Counter-narrative <strong>posted to Twitter/X</strong> as a reply to the original tweet.</>
+              : <>Response saved. Copy and post it manually on <strong>{platformLabel}</strong>.</>}
           </p>
         </div>
         {text && (
