@@ -23,6 +23,7 @@ import PlatformOverview from "./pages/PlatformOverview";
 import OrganizationDetail from "./pages/OrganizationDetail";
 import GeoSurge from "./pages/GeoSurge";
 import LandingPage from "./pages/LandingPage";
+import ViewerPage from "./pages/ViewerPage";
 import type { UserRole } from "./types/api";
 
 function RequireAuth({
@@ -47,6 +48,7 @@ export default function App() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<Login />} />
       <Route path="/submit" element={<Submit />} />
+      <Route path="/view/:token" element={<ViewerPage />} />
       <Route path="/deactivated" element={<Deactivated />} />
       <Route path="/accept-invite/:token" element={<AcceptInvite />} />
       <Route path="/claim-org/:token" element={<ClaimOrg />} />
