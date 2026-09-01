@@ -67,7 +67,8 @@ export default function ViewerPage() {
       setData(summary);
       setLastUpdated(new Date());
       setStatus('ready');
-    } catch {
+    } catch (err: unknown) {
+      console.error('[ViewerPage] getSummary failed:', err);
       if (status === 'loading') setStatus('invalid');
     } finally {
       setRefreshing(false);
