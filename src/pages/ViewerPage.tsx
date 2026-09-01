@@ -1,16 +1,48 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { createViewerApi, type ViewerSummary } from '../api/viewer';
+import {
+  LayoutDashboard, ClipboardCheck, Radio, Bell, Network,
+  ShieldCheck, Activity, AlertTriangle, CheckCircle, XCircle,
+  RefreshCw, Loader2, Shield, Menu, X, Clock, TrendingUp,
+} from 'lucide-react';
+import {
+  createViewerApi,
+  type ViewerSummary, type ViewerPostFeed, type ViewerQueueItem, type ViewerAlert,
+} from '../api/viewer';
 
 // ── Constants ────────────────────────────────────────────────────────────────
+
+type ViewKey = 'overview' | 'feed' | 'queue' | 'alerts' | 'platform';
+
+const NAV_GROUPS = [
+  {
+    label: 'Monitor',
+    items: [
+      { key: 'overview' as ViewKey, label: 'Overview',       Icon: LayoutDashboard },
+      { key: 'queue'    as ViewKey, label: 'HITL Review',    Icon: ClipboardCheck,  badge: 'queue' },
+      { key: 'feed'     as ViewKey, label: 'Live Post Feed', Icon: Radio },
+    ],
+  },
+  {
+    label: 'Operations',
+    items: [
+      { key: 'alerts'   as ViewKey, label: 'Alerts',          Icon: Bell,    badge: 'alerts' },
+      { key: 'platform' as ViewKey, label: 'Platform Status', Icon: Network },
+    ],
+  },
+];
+
+const PAGE_TITLES: Record<ViewKey, string> = {
+  overview: 'Analyst Intelligence Hub',
+  feed:     'Live Post Feed',
+  queue:    'HITL Review Queue',
+  alerts:   'Alerts',
+  platform: 'Platform Status',
+};
 
 const PLATFORM_LABELS: Record<string, string> = {
   twitter: 'Twitter / X', facebook: 'Facebook', youtube: 'YouTube',
   bluesky: 'Bluesky', instagram: 'Instagram', submission: 'Direct Submission',
-};
-
-const LANGUAGE_LABELS: Record<string, string> = {
-  en: 'English', pcm: 'Pidgin', ha: 'Hausa', yo: 'Yoruba', ig: 'Igbo',
 };
 
 const PLATFORM_COLOR: Record<string, string> = {
@@ -18,28 +50,29 @@ const PLATFORM_COLOR: Record<string, string> = {
   bluesky: '#1a6fa0', instagram: '#7b4ea0', submission: '#4a6060',
 };
 
+const LANGUAGE_LABELS: Record<string, string> = {
+  en: 'English', pcm: 'Pidgin', ha: 'Hausa', yo: 'Yoruba', ig: 'Igbo',
+};
+
 const LABEL_META: Record<string, { label: string; bg: string; color: string }> = {
   misinformation: { label: 'Misinformation',    bg: 'rgba(192,57,43,0.10)',  color: '#c0392b' },
-  factual:        { label: 'Factual Content',   bg: 'rgba(0,137,123,0.10)', color: '#00897b' },
+  factual:        { label: 'Factual',           bg: 'rgba(0,137,123,0.10)', color: '#00897b' },
   irrelevant:     { label: 'Irrelevant',        bg: 'rgba(74,96,96,0.10)',  color: '#4a6060' },
   pending:        { label: 'Awaiting Analysis', bg: 'rgba(217,119,6,0.10)', color: '#d97706' },
 };
 
-const STATUS_META = {
-  active:   { label: 'Live',     dot: '#00897b', desc: 'Receiving data'   },
-  degraded: { label: 'Slow',     dot: '#d97706', desc: 'Reduced activity' },
-  waiting:  { label: 'No data',  dot: '#8da8a8', desc: 'Not yet seen'     },
+const SEVERITY_COLOR: Record<string, string> = {
+  high: '#c0392b', medium: '#d97706', low: '#00897b', info: '#5ba4cf',
 };
 
-function threatLevel(rate: number): { label: string; color: string; bg: string; glow: boolean } {
-  if (rate < 10)  return { label: 'LOW',      color: '#00897b', bg: 'rgba(0,137,123,0.10)',  glow: false };
-  if (rate < 25)  return { label: 'MODERATE', color: '#d97706', bg: 'rgba(217,119,6,0.10)',  glow: false };
-  if (rate < 50)  return { label: 'HIGH',     color: '#e65100', bg: 'rgba(230,81,0,0.10)',   glow: true  };
-  return            { label: 'CRITICAL',       color: '#c0392b', bg: 'rgba(192,57,43,0.10)',  glow: true  };
-}
+const STATUS_META = {
+  active:   { label: 'Live',    dot: '#00897b' },
+  degraded: { label: 'Slow',    dot: '#d97706' },
+  waiting:  { label: 'No data', dot: '#8da8a8' },
+};
 
-function fmt(n: number)     { return n.toLocaleString(); }
-function pct(n: number)     { return `${n.toFixed(1)}%`; }
+function fmt(n: number)    { return n.toLocaleString(); }
+function pct(n: number)    { return `${n.toFixed(1)}%`; }
 function timeAgo(iso: string) {
   if (!iso) return '—';
   const diff = Date.now() - new Date(iso).getTime();
@@ -51,620 +84,736 @@ function timeAgo(iso: string) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+function threatLevel(rate: number) {
+  if (rate < 10)  return { label: 'LOW',      color: '#00897b', bg: 'rgba(0,137,123,0.10)' };
+  if (rate < 25)  return { label: 'MODERATE', color: '#d97706', bg: 'rgba(217,119,6,0.10)' };
+  if (rate < 50)  return { label: 'HIGH',     color: '#e65100', bg: 'rgba(230,81,0,0.10)'  };
+  return            { label: 'CRITICAL',       color: '#c0392b', bg: 'rgba(192,57,43,0.10)' };
+}
+
+// ── Shared sub-components ─────────────────────────────────────────────────────
+
+function LabelChip({ label }: { label: string }) {
+  const m = LABEL_META[label] ?? LABEL_META.pending;
+  return (
+    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 5, background: m.bg, color: m.color, whiteSpace: 'nowrap' }}>
+      {m.label}
+    </span>
+  );
+}
+
+function PlatformChip({ platform }: { platform: string }) {
+  const color = PLATFORM_COLOR[platform] ?? '#4a6060';
+  return (
+    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 5, background: `${color}18`, color, whiteSpace: 'nowrap' }}>
+      {PLATFORM_LABELS[platform] ?? platform}
+    </span>
+  );
+}
+
+function EmptyState({ icon, message }: { icon: React.ReactNode; message: string }) {
+  return (
+    <div style={{ padding: '48px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+      <span style={{ color: 'var(--text-muted)', opacity: 0.5 }}>{icon}</span>
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>{message}</p>
+    </div>
+  );
+}
+
+function ViewLoader() {
+  return (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
+      <Loader2 className="animate-spin" style={{ width: 28, height: 28, color: 'var(--text-muted)' }} />
+    </div>
+  );
+}
+
+// ── View: Overview ───────────────────────────────────────────────────────────
+
+function OverviewView({ summary }: { summary: ViewerSummary }) {
+  const { stats, labels, platforms, recentPosts, connectors } = summary;
+  const threat = threatLevel(stats.misinfoRate);
+  const totalLabeled = labels.reduce((s, l) => s + l.count, 0) || 1;
+  const totalPlatform = platforms.reduce((s, p) => s + p.count, 0) || 1;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+      {/* KPI row */}
+      <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
+        {[
+          { label: 'Posts Monitored',       value: fmt(stats.totalPosts),    sub: 'Total content analyzed', Icon: Activity, color: '#0d3d3d' },
+          { label: 'Analyzed Today',         value: fmt(stats.todayPosts),    sub: 'New in last 24 h',       Icon: Clock,    color: '#005048' },
+          { label: 'Pending Review',         value: fmt(stats.pendingReviews),sub: 'Awaiting analyst',       Icon: ClipboardCheck, color: '#d97706' },
+          { label: 'Misinfo Rate',           value: pct(stats.misinfoRate),   sub: 'Of classified content',  Icon: AlertTriangle,  color: '#c0392b' },
+        ].map(({ label, value, sub, Icon, color }) => (
+          <div key={label} className="glass-card" style={{ padding: '18px 20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <span className="label-caps" style={{ color: 'var(--text-muted)', fontSize: 10 }}>{label}</span>
+              <Icon style={{ width: 15, height: 15, color, opacity: 0.6 }} />
+            </div>
+            <p style={{ margin: 0, fontSize: 26, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em', lineHeight: 1 }}>{value}</p>
+            <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--text-muted)' }}>{sub}</p>
+          </div>
+        ))}
+
+        {/* Threat level card */}
+        <div className="glass-card" style={{ padding: '18px 20px', borderColor: threat.color, borderWidth: 1.5 }}>
+          <span className="label-caps" style={{ color: 'var(--text-muted)', fontSize: 10, display: 'block', marginBottom: 10 }}>Threat Level</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+            <span style={{ fontSize: 22, fontWeight: 800, color: threat.color, letterSpacing: '-0.01em' }}>{threat.label}</span>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: threat.bg, color: threat.color }}>{pct(stats.misinfoRate)}</span>
+          </div>
+          <div style={{ height: 5, borderRadius: 3, background: 'rgba(13,61,61,0.08)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${Math.min(stats.misinfoRate, 100)}%`, background: threat.color, borderRadius: 3, transition: 'width .5s' }} />
+          </div>
+        </div>
+      </div>
+
+      {/* Middle row */}
+      <div style={{ display: 'grid', gap: 16, gridTemplateColumns: '1fr 320px' }}>
+
+        {/* Recent posts */}
+        <div className="glass-card" style={{ padding: 20 }}>
+          <p className="label-caps" style={{ margin: '0 0 14px', color: 'var(--text-muted)', fontSize: 10 }}>Latest Monitored Content</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 440, overflowY: 'auto' }}>
+            {recentPosts.map((post, i) => (
+              <PostRow key={i} post={post} />
+            ))}
+          </div>
+        </div>
+
+        {/* Right col */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Classification */}
+          <div className="glass-card" style={{ padding: 20 }}>
+            <p className="label-caps" style={{ margin: '0 0 14px', color: 'var(--text-muted)', fontSize: 10 }}>Classification Breakdown</p>
+            {labels.map(({ label, count }) => {
+              const m = LABEL_META[label] ?? LABEL_META.pending;
+              const share = Math.round((count / totalLabeled) * 100);
+              return (
+                <div key={label} style={{ marginBottom: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: m.color }}>{m.label}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{fmt(count)} · {share}%</span>
+                  </div>
+                  <div style={{ height: 5, borderRadius: 3, background: 'rgba(13,61,61,0.08)', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${share}%`, background: m.color, opacity: 0.75, borderRadius: 3 }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Platform coverage */}
+          <div className="glass-card" style={{ padding: 20 }}>
+            <p className="label-caps" style={{ margin: '0 0 14px', color: 'var(--text-muted)', fontSize: 10 }}>Platform Coverage</p>
+            {platforms.map(({ platform, count }) => {
+              const color = PLATFORM_COLOR[platform] ?? '#4a6060';
+              const share = Math.round((count / totalPlatform) * 100);
+              return (
+                <div key={platform} style={{ marginBottom: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color }}>{PLATFORM_LABELS[platform] ?? platform}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{fmt(count)} · {share}%</span>
+                  </div>
+                  <div style={{ height: 5, borderRadius: 3, background: 'rgba(13,61,61,0.08)', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${share}%`, background: color, opacity: 0.75, borderRadius: 3 }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Connectors */}
+      <div className="glass-card" style={{ padding: 20 }}>
+        <p className="label-caps" style={{ margin: '0 0 14px', color: 'var(--text-muted)', fontSize: 10 }}>Live Data Sources</p>
+        <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))' }}>
+          {connectors.map(({ platform, status: s, eventsPerMin, lastEventAt }) => {
+            const sm  = STATUS_META[s] ?? STATUS_META.waiting;
+            const col = PLATFORM_COLOR[platform] ?? '#4a6060';
+            return (
+              <div key={platform} style={{ padding: '12px 14px', borderRadius: 10, background: 'rgba(13,61,61,0.03)', border: '1px solid rgba(13,61,61,0.07)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: col }}>{PLATFORM_LABELS[platform] ?? platform}</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: sm.dot, display: 'inline-block' }} />
+                    <span style={{ fontSize: 10, fontWeight: 600, color: sm.dot }}>{sm.label}</span>
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: 10, color: 'var(--text-muted)' }}>
+                  {s === 'active' ? `${eventsPerMin} posts/min` : lastEventAt ? `Last: ${timeAgo(lastEventAt)}` : 'No data yet'}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── View: Feed ───────────────────────────────────────────────────────────────
+
+function FeedView({ api }: { api: ReturnType<typeof createViewerApi> }) {
+  const [feed,    setFeed]    = useState<ViewerPostFeed | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [page,    setPage]    = useState(1);
+
+  const load = useCallback(async (p: number) => {
+    setLoading(true);
+    try { setFeed(await api.getPosts(p)); } finally { setLoading(false); }
+  }, [api]);
+
+  useEffect(() => { void load(page); }, [load, page]);
+
+  if (loading && !feed) return <ViewLoader />;
+
+  return (
+    <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(13,61,61,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>All Monitored Posts</p>
+          <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--text-muted)' }}>
+            {feed ? `${fmt(feed.total)} total · page ${feed.page}` : ''}
+          </p>
+        </div>
+        {loading && <Loader2 style={{ width: 16, height: 16, color: 'var(--text-muted)' }} className="animate-spin" />}
+      </div>
+
+      {/* Table */}
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid rgba(13,61,61,0.07)' }}>
+              {['Platform', 'Language', 'Classification', 'Confidence', 'Content', 'Ingested'].map((h) => (
+                <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {feed?.posts.map((post) => (
+              <tr key={post._id} style={{ borderBottom: '1px solid rgba(13,61,61,0.04)' }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = 'rgba(13,61,61,0.02)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = 'transparent'; }}>
+                <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}><PlatformChip platform={post.platform} /></td>
+                <td style={{ padding: '10px 16px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{LANGUAGE_LABELS[post.language] ?? post.language}</td>
+                <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}><LabelChip label={post.label} /></td>
+                <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                  {post.confidence > 0 ? pct(post.confidence * 100) : '—'}
+                </td>
+                <td style={{ padding: '10px 16px', color: 'var(--text-secondary)', maxWidth: 400 }}>
+                  <span style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.4 }}>
+                    {post.content}
+                  </span>
+                </td>
+                <td style={{ padding: '10px 16px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{timeAgo(post.ingestedAt)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Pagination */}
+      {feed && feed.total > feed.limit && (
+        <div style={{ padding: '12px 20px', borderTop: '1px solid rgba(13,61,61,0.07)', display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+            style={{ fontSize: 12, padding: '5px 12px', borderRadius: 8, border: '1px solid rgba(13,61,61,0.12)', background: 'transparent', color: 'var(--text-secondary)', cursor: page <= 1 ? 'not-allowed' : 'pointer', opacity: page <= 1 ? 0.4 : 1 }}
+          >← Prev</button>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Page {page} of {Math.ceil(feed.total / feed.limit)}</span>
+          <button
+            onClick={() => setPage((p) => p + 1)}
+            disabled={page >= Math.ceil(feed.total / feed.limit)}
+            style={{ fontSize: 12, padding: '5px 12px', borderRadius: 8, border: '1px solid rgba(13,61,61,0.12)', background: 'transparent', color: 'var(--text-secondary)', cursor: page >= Math.ceil(feed.total / feed.limit) ? 'not-allowed' : 'pointer', opacity: page >= Math.ceil(feed.total / feed.limit) ? 0.4 : 1 }}
+          >Next →</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── View: Queue ──────────────────────────────────────────────────────────────
+
+function QueueView({ api, pendingCount }: { api: ReturnType<typeof createViewerApi>; pendingCount: number }) {
+  const [items,   setItems]   = useState<ViewerQueueItem[] | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    void (async () => {
+      setLoading(true);
+      try { const r = await api.getQueue(); setItems(r.reviews); } finally { setLoading(false); }
+    })();
+  }, [api]);
+
+  if (loading && !items) return <ViewLoader />;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Pending Review Queue</p>
+        {pendingCount > 0 && (
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: '#c0392b', color: '#fff' }}>
+            {pendingCount} pending
+          </span>
+        )}
+      </div>
+      <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
+        Posts the AI has flagged with low confidence, queued for a human analyst to verify before any response is issued.
+      </p>
+
+      {items?.length === 0 && (
+        <EmptyState icon={<CheckCircle style={{ width: 40, height: 40 }} />} message="No posts pending review right now" />
+      )}
+
+      {items?.map((item) => {
+        const post     = item.postId;
+        const priority = item.priority === 'high' ? { bg: 'rgba(192,57,43,0.10)', color: '#c0392b', label: 'High Priority' } : { bg: 'rgba(217,119,6,0.10)', color: '#d97706', label: 'Standard' };
+        return (
+          <div key={item._id} className="glass-card" style={{ padding: 18 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+              {post && <PlatformChip platform={post.platform} />}
+              {post && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{LANGUAGE_LABELS[post.language] ?? post.language}</span>}
+              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 5, background: priority.bg, color: priority.color }}>{priority.label}</span>
+              <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 'auto' }}>
+                <Clock style={{ width: 10, height: 10, display: 'inline', marginRight: 3 }} />
+                {timeAgo(item.createdAt)}
+              </span>
+            </div>
+            {post && (
+              <p style={{ margin: '0 0 10px', fontSize: 12, lineHeight: 1.55, color: 'var(--text-secondary)' }}>
+                {post.content}
+              </p>
+            )}
+            {item.proposedResponse && (
+              <div style={{ padding: '10px 14px', borderRadius: 8, background: 'rgba(0,137,123,0.05)', border: '1px solid rgba(0,137,123,0.12)', marginBottom: 10 }}>
+                <p style={{ margin: '0 0 4px', fontSize: 10, fontWeight: 700, color: '#00897b', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Proposed Counter-narrative</p>
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{item.proposedResponse}</p>
+              </div>
+            )}
+            {/* View-only — no action buttons */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Shield style={{ width: 11, height: 11, color: 'var(--text-muted)' }} />
+              <span style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>Awaiting analyst decision — view only</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── View: Alerts ─────────────────────────────────────────────────────────────
+
+function AlertsView({ api }: { api: ReturnType<typeof createViewerApi> }) {
+  const [alerts,  setAlerts]  = useState<ViewerAlert[] | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    void (async () => {
+      setLoading(true);
+      try { const r = await api.getAlerts(); setAlerts(r.alerts); } finally { setLoading(false); }
+    })();
+  }, [api]);
+
+  if (loading && !alerts) return <ViewLoader />;
+
+  const TRIGGER_LABEL: Record<string, string> = {
+    surge: 'Volume Surge', psi_drift: 'Model Drift', model_update: 'Model Update',
+    connector_error: 'Connector Error', override_rate: 'High Override Rate',
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+        Active Alerts
+        {alerts && alerts.length > 0 && (
+          <span style={{ marginLeft: 10, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: '#c0392b', color: '#fff' }}>{alerts.length}</span>
+        )}
+      </p>
+      <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>System-generated alerts that have not yet been resolved by an analyst.</p>
+
+      {alerts?.length === 0 && (
+        <EmptyState icon={<CheckCircle style={{ width: 40, height: 40 }} />} message="No active alerts — system is running normally" />
+      )}
+
+      {alerts?.map((alert) => {
+        const sev = SEVERITY_COLOR[alert.severity] ?? '#8da8a8';
+        return (
+          <div key={alert._id} className="glass-card" style={{ padding: 18, borderLeft: `3px solid ${sev}` }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 5, background: `${sev}18`, color: sev, textTransform: 'capitalize' }}>
+                    {alert.severity}
+                  </span>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', padding: '2px 7px', borderRadius: 5, background: 'rgba(13,61,61,0.05)' }}>
+                    {TRIGGER_LABEL[alert.triggerType] ?? alert.triggerType}
+                  </span>
+                  {alert.platform && <PlatformChip platform={alert.platform} />}
+                </div>
+                <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{alert.title}</p>
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.55 }}>{alert.message}</p>
+              </div>
+              <span style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>{timeAgo(alert.createdAt)}</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── View: Platform Status ────────────────────────────────────────────────────
+
+function PlatformView({ summary }: { summary: ViewerSummary }) {
+  const { connectors, platforms } = summary;
+  const totalPlatform = platforms.reduce((s, p) => s + p.count, 0) || 1;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+      {/* Connector grid */}
+      <div className="glass-card" style={{ padding: 20 }}>
+        <p style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Ingestion Connector Health</p>
+        <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+          {connectors.map(({ platform, status: s, eventsPerMin, lastEventAt }) => {
+            const sm  = STATUS_META[s] ?? STATUS_META.waiting;
+            const col = PLATFORM_COLOR[platform] ?? '#4a6060';
+            const StatusIcon = s === 'active' ? CheckCircle : s === 'degraded' ? AlertTriangle : XCircle;
+            return (
+              <div key={platform} style={{ padding: '16px', borderRadius: 12, border: `1px solid ${col}28`, background: `${col}06` }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: col }}>{PLATFORM_LABELS[platform] ?? platform}</span>
+                  <StatusIcon style={{ width: 16, height: 16, color: sm.dot }} />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 4 }}>
+                  <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
+                    {s === 'active' ? eventsPerMin : '—'}
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s === 'active' ? 'posts/min' : ''}</span>
+                </div>
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: sm.dot }}>
+                  {sm.label}
+                  {s !== 'active' && lastEventAt ? ` · last ${timeAgo(lastEventAt)}` : ''}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Platform volume */}
+      <div className="glass-card" style={{ padding: 20 }}>
+        <p style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Volume by Platform</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {platforms.map(({ platform, count }) => {
+            const color = PLATFORM_COLOR[platform] ?? '#4a6060';
+            const share = Math.round((count / totalPlatform) * 100);
+            return (
+              <div key={platform}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color }}>{PLATFORM_LABELS[platform] ?? platform}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{fmt(count)} posts · {share}%</span>
+                </div>
+                <div style={{ height: 7, borderRadius: 4, background: 'rgba(13,61,61,0.08)', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${share}%`, background: color, opacity: 0.75, borderRadius: 4 }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Trend context */}
+      <div className="glass-card" style={{ padding: 20, display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+        <TrendingUp style={{ width: 32, height: 32, color: '#00897b', flexShrink: 0, marginTop: 2 }} />
+        <div>
+          <p style={{ margin: '0 0 6px', fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Active Monitoring</p>
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6, maxWidth: 520 }}>
+            ImmuniWatch continuously monitors content across all connected platforms. When a connector shows "Slow" or "No data",
+            analysts are automatically alerted so the connection can be restored promptly.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Shared PostRow ────────────────────────────────────────────────────────────
+
+function PostRow({ post }: { post: ViewerSummary['recentPosts'][number] }) {
+  return (
+    <div style={{ padding: '10px 12px', borderRadius: 10, background: 'rgba(13,61,61,0.025)', border: '1px solid rgba(13,61,61,0.06)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+        <span style={{ width: 7, height: 7, borderRadius: '50%', background: PLATFORM_COLOR[post.platform] ?? '#4a6060', display: 'inline-block', flexShrink: 0 }} />
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>{PLATFORM_LABELS[post.platform] ?? post.platform}</span>
+        {post.language && (
+          <span style={{ fontSize: 10, color: 'var(--text-muted)', padding: '1px 5px', borderRadius: 4, background: 'rgba(13,61,61,0.05)' }}>
+            {LANGUAGE_LABELS[post.language] ?? post.language}
+          </span>
+        )}
+        <LabelChip label={post.label} />
+        {post.confidence > 0 && (
+          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{Math.round(post.confidence * 100)}% confidence</span>
+        )}
+        <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{timeAgo(post.ingestedAt)}</span>
+      </div>
+      <p style={{ margin: 0, fontSize: 12, lineHeight: 1.55, color: 'var(--text-secondary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' } as React.CSSProperties}>
+        {post.content}
+      </p>
+    </div>
+  );
+}
+
+// ── Root page ────────────────────────────────────────────────────────────────
 
 export default function ViewerPage() {
   const { token } = useParams<{ token: string }>();
   const api = useRef(token ? createViewerApi(token) : null);
 
-  const [status,      setStatus]      = useState<'loading' | 'invalid' | 'ready'>('loading');
-  const [data,        setData]        = useState<ViewerSummary | null>(null);
+  const [pageStatus,  setPageStatus]  = useState<'loading' | 'invalid' | 'ready'>('loading');
+  const [summary,     setSummary]     = useState<ViewerSummary | null>(null);
+  const [activeView,  setActiveView]  = useState<ViewKey>('overview');
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [refreshing,  setRefreshing]  = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  async function load(spinner = false) {
-    if (!api.current) { setStatus('invalid'); return; }
+  const loadSummary = useCallback(async (spinner = false) => {
+    if (!api.current) { setPageStatus('invalid'); return; }
     if (spinner) setRefreshing(true);
     try {
-      const summary = await api.current.getSummary();
-      setData(summary);
+      const s = await api.current.getSummary();
+      setSummary(s);
       setLastUpdated(new Date());
-      setStatus('ready');
+      setPageStatus('ready');
     } catch (err: unknown) {
       console.error('[ViewerPage] getSummary failed:', err);
-      if (status === 'loading') setStatus('invalid');
+      if (pageStatus === 'loading') setPageStatus('invalid');
     } finally {
       setRefreshing(false);
     }
-  }
+  }, [pageStatus]);
 
   useEffect(() => {
-    void load();
-    const id = setInterval(() => { void load(); }, 60_000);
+    void loadSummary();
+    const id = setInterval(() => { void loadSummary(); }, 60_000);
     return () => clearInterval(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Loading ──────────────────────────────────────────────────────────────────
+  // ── Loading / Invalid ───────────────────────────────────────────────────────
 
-  if (status === 'loading') return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
-      <style>{CSS}</style>
-      <div className="spinner" />
+  if (pageStatus === 'loading') return (
+    <div className="app-bg" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <Loader2 className="animate-spin" style={{ width: 32, height: 32, color: '#0d3d3d', opacity: 0.5 }} />
     </div>
   );
 
-  // ── Invalid ──────────────────────────────────────────────────────────────────
-
-  if (status === 'invalid') return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24, background: 'var(--bg)' }}>
-      <style>{CSS}</style>
+  if (pageStatus === 'invalid') return (
+    <div className="app-bg" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24 }}>
       <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'rgba(192,57,43,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c0392b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <Shield style={{ width: 24, height: 24, color: '#c0392b' }} />
       </div>
-      <h1 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: 'var(--text-primary)' }}>Invalid or expired link</h1>
-      <p style={{ margin: 0, fontSize: 14, color: 'var(--text-muted)', textAlign: 'center', maxWidth: 360, lineHeight: 1.6 }}>
+      <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0d3d3d' }}>Invalid or expired link</h1>
+      <p style={{ margin: 0, fontSize: 13, color: '#6b8f8f', textAlign: 'center', maxWidth: 360, lineHeight: 1.6 }}>
         This view-only link is not recognised. Contact the platform administrator for a valid link.
       </p>
     </div>
   );
 
-  // ── Ready ─────────────────────────────────────────────────────────────────────
+  // ── Ready ───────────────────────────────────────────────────────────────────
 
-  const { stats, labels, platforms, recentPosts, connectors } = data!;
-  const threat = threatLevel(stats.misinfoRate);
-  const totalPlatformPosts = platforms.reduce((s, p) => s + p.count, 0) || 1;
-  const totalLabeled = labels.reduce((s, l) => s + l.count, 0) || 1;
-  const misinfoCount = labels.find(l => l.label === 'misinformation')?.count ?? 0;
-  const factualCount = labels.find(l => l.label === 'factual')?.count        ?? 0;
+  const pendingCount = summary?.stats.pendingReviews ?? 0;
+  const alertBadge   = 0; // loaded per-view
 
-  return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', fontFamily: "'Inter', system-ui, sans-serif" }}>
-      <style>{CSS}</style>
+  const BADGE_MAP: Record<string, number> = { queue: pendingCount, alerts: alertBadge };
 
-      {/* ── Header ────────────────────────────────────────────────────────── */}
-      <header className="site-header">
-        <div className="header-inner">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div className="logo-mark">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
-            </div>
-            <span className="logo-text">ImmuniWatch <span className="logo-sub">Nigeria</span></span>
-            <span className="view-badge">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-              Read-only
-            </span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span className="live-pill">
-              <span className="live-dot" />
-              LIVE
-            </span>
-            {lastUpdated && (
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                Updated {timeAgo(lastUpdated.toISOString())}
-              </span>
-            )}
-            <button className="refresh-btn" onClick={() => void load(true)} disabled={refreshing}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={refreshing ? 'spin' : ''}>
-                <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-              </svg>
-              Refresh
-            </button>
-          </div>
+  // ── Sidebar content ─────────────────────────────────────────────────────────
+
+  const sidebarContent = (
+    <aside className="sidebar-primary" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
+
+      {/* Logo */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '20px 20px 16px', borderBottom: '1px solid rgba(255,255,255,0.07)', flexShrink: 0 }}>
+        <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, rgba(167,243,208,0.22), rgba(167,243,208,0.10))', border: '1px solid rgba(167,243,208,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <ShieldCheck style={{ width: 18, height: 18, color: '#fff' }} />
         </div>
-      </header>
-
-      {/* ── Mission strip ─────────────────────────────────────────────────── */}
-      <div className="mission-strip">
-        <p className="mission-text">
-          Real-time surveillance of vaccine misinformation across Nigerian social media.
-          Content is automatically ingested, classified by AI, and reviewed by human analysts before any response is deployed.
-        </p>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', letterSpacing: '0.01em' }}>ImmuniWatch</div>
+          <div style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.40)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>View-Only Access</div>
+        </div>
+        <button onClick={() => setSidebarOpen(false)} className="vw-mobile-only" style={{ color: 'rgba(255,255,255,0.4)', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+          <X style={{ width: 16, height: 16 }} />
+        </button>
       </div>
 
-      <main className="main-content">
+      {/* Live badge */}
+      <div style={{ margin: '12px', padding: '8px 12px', borderRadius: 10, background: 'rgba(0,137,123,0.10)', border: '1px solid rgba(0,137,123,0.18)', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#00897b', flexShrink: 0, animation: 'pulse-dot 2s ease-in-out infinite' }} />
+        <div>
+          <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: '#4db6ac', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Live Dashboard</p>
+          <p style={{ margin: 0, fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>
+            {lastUpdated ? `Refreshed ${timeAgo(lastUpdated.toISOString())}` : 'Loading…'}
+          </p>
+        </div>
+      </div>
 
-        {/* ── KPI cards ─────────────────────────────────────────────────────── */}
-        <section className="kpi-grid">
-
-          <div className="kpi-card">
-            <div className="kpi-eyebrow">Posts Monitored</div>
-            <div className="kpi-value">{fmt(stats.totalPosts)}</div>
-            <div className="kpi-sub">Total content analyzed since launch</div>
-          </div>
-
-          <div className="kpi-card">
-            <div className="kpi-eyebrow">Ingested Today</div>
-            <div className="kpi-value">{fmt(stats.todayPosts)}</div>
-            <div className="kpi-sub">New posts collected in the last 24 hours</div>
-          </div>
-
-          <div className="kpi-card">
-            <div className="kpi-eyebrow">Content Classified</div>
-            <div className="kpi-value">{fmt(totalLabeled)}</div>
-            <div className="kpi-sub">Posts with an AI or analyst verdict</div>
-            <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              <span className="mini-chip" style={{ background: LABEL_META.misinformation.bg, color: LABEL_META.misinformation.color }}>
-                {fmt(misinfoCount)} misinfo
-              </span>
-              <span className="mini-chip" style={{ background: LABEL_META.factual.bg, color: LABEL_META.factual.color }}>
-                {fmt(factualCount)} factual
-              </span>
+      {/* Navigation */}
+      <nav style={{ flex: 1, padding: '8px 12px 12px' }}>
+        {NAV_GROUPS.map((group) => (
+          <div key={group.label} style={{ marginBottom: 20 }}>
+            <div style={{ padding: '0 12px', marginBottom: 6, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.28)' }}>
+              {group.label}
             </div>
-          </div>
-
-          <div className="kpi-card">
-            <div className="kpi-eyebrow">Pending Analyst Review</div>
-            <div className="kpi-value">{fmt(stats.pendingReviews)}</div>
-            <div className="kpi-sub">Posts flagged and waiting for a human decision</div>
-          </div>
-
-          {/* Threat level — accent card */}
-          <div className="kpi-card threat-card" style={{
-            borderColor: threat.color,
-            boxShadow: threat.glow
-              ? `0 0 0 1px ${threat.color}33, 0 0 24px ${threat.color}22`
-              : undefined,
-          }}>
-            <div className="kpi-eyebrow">Misinfo Threat Level</div>
-            <div className="threat-level-row">
-              <span className="threat-label" style={{ color: threat.color }}>{threat.label}</span>
-              <span className="threat-rate" style={{ background: threat.bg, color: threat.color }}>
-                {pct(stats.misinfoRate)}
-              </span>
-            </div>
-            <div className="threat-bar-track">
-              <div className="threat-bar-fill" style={{
-                width: `${Math.min(stats.misinfoRate, 100)}%`,
-                background: threat.color,
-              }} />
-              <span className="threat-bar-tick" style={{ left: '10%' }} />
-              <span className="threat-bar-tick" style={{ left: '25%' }} />
-              <span className="threat-bar-tick" style={{ left: '50%' }} />
-            </div>
-            <div className="threat-scale">
-              <span>Low</span><span>Moderate</span><span>High</span><span>Critical</span>
-            </div>
-            <div className="kpi-sub" style={{ marginTop: 8 }}>
-              Share of classified content identified as vaccine misinformation
-            </div>
-          </div>
-
-        </section>
-
-        {/* ── Middle: Recent content + breakdowns ───────────────────────── */}
-        <section className="mid-grid">
-
-          {/* Recent posts */}
-          <div className="glass-panel feed-panel">
-            <div className="panel-header">
-              <div>
-                <h2 className="panel-title">Latest Monitored Content</h2>
-                <p className="panel-desc">The 30 most recently collected posts, shown with their AI classification</p>
-              </div>
-            </div>
-            <div className="feed-list">
-              {recentPosts.length === 0 && (
-                <p style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: '32px 0' }}>
-                  No content yet
-                </p>
-              )}
-              {recentPosts.map((post, i) => {
-                const meta = LABEL_META[post.label] ?? LABEL_META.pending;
-                const pc   = PLATFORM_COLOR[post.platform] ?? '#4a6060';
-                return (
-                  <div key={i} className="feed-row">
-                    <div className="feed-row-meta">
-                      <span className="platform-dot" style={{ background: pc }} />
-                      <span className="feed-platform">{PLATFORM_LABELS[post.platform] ?? post.platform}</span>
-                      {post.language && (
-                        <span className="feed-lang">{LANGUAGE_LABELS[post.language] ?? post.language}</span>
-                      )}
-                      <span className="verdict-chip" style={{ background: meta.bg, color: meta.color }}>
-                        {meta.label}
-                      </span>
-                      {post.confidence > 0 && (
-                        <span className="confidence-bar-wrap" title={`${Math.round(post.confidence * 100)}% model confidence`}>
-                          <span className="confidence-bar-fill" style={{ width: `${Math.round(post.confidence * 100)}%`, background: meta.color }} />
-                        </span>
-                      )}
-                      <span className="feed-time">{timeAgo(post.ingestedAt)}</span>
-                    </div>
-                    <p className="feed-content">{post.content}</p>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Right column */}
-          <div className="right-col">
-
-            {/* Classification breakdown */}
-            <div className="glass-panel">
-              <h2 className="panel-title">Content Classification</h2>
-              <p className="panel-desc">How AI has categorised all analysed posts</p>
-              <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {labels.map(({ label, count }) => {
-                  const meta  = LABEL_META[label] ?? LABEL_META.pending;
-                  const share = Math.round((count / totalLabeled) * 100);
-                  return (
-                    <div key={label}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: meta.color }}>{meta.label}</span>
-                        <span style={{ fontSize: 12, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-                          {fmt(count)} · {share}%
-                        </span>
-                      </div>
-                      <div className="bar-track">
-                        <div className="bar-fill" style={{ width: `${share}%`, background: meta.color }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Platform coverage */}
-            <div className="glass-panel">
-              <h2 className="panel-title">Platform Coverage</h2>
-              <p className="panel-desc">Volume of posts collected per social platform</p>
-              <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {platforms.map(({ platform, count }) => {
-                  const color = PLATFORM_COLOR[platform] ?? '#4a6060';
-                  const share = Math.round((count / totalPlatformPosts) * 100);
-                  return (
-                    <div key={platform}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <span style={{ fontSize: 12, fontWeight: 600, color }}>{PLATFORM_LABELS[platform] ?? platform}</span>
-                        <span style={{ fontSize: 12, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-                          {fmt(count)} · {share}%
-                        </span>
-                      </div>
-                      <div className="bar-track">
-                        <div className="bar-fill" style={{ width: `${share}%`, background: color, opacity: 0.8 }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-          </div>
-        </section>
-
-        {/* ── Data sources ──────────────────────────────────────────────────── */}
-        <section className="glass-panel">
-          <div className="panel-header" style={{ marginBottom: 16 }}>
-            <div>
-              <h2 className="panel-title">Live Data Sources</h2>
-              <p className="panel-desc">Whether each platform connector is actively delivering new content</p>
-            </div>
-          </div>
-          <div className="sources-grid">
-            {connectors.map(({ platform, status: s, eventsPerMin, lastEventAt }) => {
-              const sm  = STATUS_META[s];
-              const col = PLATFORM_COLOR[platform] ?? '#4a6060';
+            {group.items.map(({ key, label, Icon, badge }) => {
+              const isActive = activeView === key;
+              const cnt = badge ? BADGE_MAP[badge] ?? 0 : 0;
               return (
-                <div key={platform} className="source-card">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: col }}>
-                      {PLATFORM_LABELS[platform] ?? platform}
-                    </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: sm.dot, display: 'inline-block' }} />
-                      <span style={{ fontSize: 11, fontWeight: 600, color: sm.dot }}>{sm.label}</span>
-                    </span>
+                <button
+                  key={key}
+                  onClick={() => { setActiveView(key); setSidebarOpen(false); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                    padding: '8px 12px', borderRadius: 10, marginBottom: 2,
+                    border: isActive ? '1px solid rgba(167,243,208,0.12)' : '1px solid transparent',
+                    background: isActive ? 'rgba(167,243,208,0.13)' : 'transparent',
+                    color: isActive ? '#fff' : 'rgba(255,255,255,0.52)',
+                    cursor: 'pointer', textAlign: 'left', transition: 'all .15s',
+                  }}
+                  onMouseEnter={(e) => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.80)'; }}
+                  onMouseLeave={(e) => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.52)'; }}
+                >
+                  <div style={{ width: 28, height: 28, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: isActive ? 'rgba(167,243,208,0.16)' : 'transparent' }}>
+                    <Icon style={{ width: 15, height: 15, color: isActive ? '#a7f3d0' : 'rgba(255,255,255,0.48)' }} />
                   </div>
-                  <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                    {s === 'active'
-                      ? `${eventsPerMin} posts/min · ${sm.desc}`
-                      : lastEventAt
-                        ? `Last data ${timeAgo(lastEventAt)} · ${sm.desc}`
-                        : sm.desc
-                    }
-                  </p>
-                </div>
+                  <span style={{ flex: 1, fontSize: 13, fontWeight: 500, lineHeight: 1 }}>{label}</span>
+                  {cnt > 0 && (
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 20, background: '#c0392b', color: '#fff', lineHeight: 1 }}>
+                      {cnt > 99 ? '99+' : cnt}
+                    </span>
+                  )}
+                </button>
               );
             })}
           </div>
-        </section>
+        ))}
+      </nav>
 
-        {/* ── Footer ────────────────────────────────────────────────────────── */}
-        <footer className="page-footer">
-          <span>ImmuniWatch Nigeria</span>
-          <span className="footer-dot" />
-          <span>Secure read-only view · no login required</span>
-          <span className="footer-dot" />
-          <span>Auto-refreshes every 60 seconds</span>
-        </footer>
+      {/* Footer */}
+      <div style={{ padding: '14px 16px', borderTop: '1px solid rgba(255,255,255,0.07)', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(167,243,208,0.12)', border: '1px solid rgba(167,243,208,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Shield style={{ width: 14, height: 14, color: '#a7f3d0' }} />
+          </div>
+          <div>
+            <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.75)' }}>Secure View-Only Link</p>
+            <p style={{ margin: 0, fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>No login required · Read only</p>
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
 
-      </main>
+  // ── Full layout ─────────────────────────────────────────────────────────────
+
+  return (
+    <div className="app-bg" style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+      <style>{`
+        @keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.7)} }
+        .view-content-scroll::-webkit-scrollbar { width: 4px; }
+        .view-content-scroll::-webkit-scrollbar-track { background: transparent; }
+        .view-content-scroll::-webkit-scrollbar-thumb { background: rgba(13,61,61,.12); border-radius: 2px; }
+        .view-content-scroll table tr:last-child { border-bottom: none; }
+        @media (prefers-reduced-motion: reduce) { [style*="animation"] { animation: none !important; } }
+
+        .vw-mobile-only  { display: flex; }
+        .vw-desktop-only { display: none; }
+        .vw-sidebar-desktop { display: none !important; }
+        .vw-mobile-overlay  { position: fixed; inset: 0; z-index: 40; }
+
+        @media (min-width: 768px) {
+          .vw-mobile-only  { display: none !important; }
+          .vw-desktop-only { display: flex; }
+          .vw-sidebar-desktop { display: flex !important; flex-direction: column; flex-shrink: 0; }
+          .vw-mobile-overlay  { display: none !important; }
+        }
+      `}</style>
+
+      {/* Desktop sidebar */}
+      <div className="vw-sidebar-desktop" style={{ width: 260, minHeight: '100vh', flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
+        {sidebarContent}
+      </div>
+
+      {/* Mobile drawer */}
+      {sidebarOpen && (
+        <div className="vw-mobile-overlay">
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)' }} onClick={() => setSidebarOpen(false)} />
+          <div style={{ position: 'absolute', inset: '0 auto 0 0', width: 280, zIndex: 50 }}>
+            {sidebarContent}
+          </div>
+        </div>
+      )}
+
+      {/* Main */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+
+        {/* Topbar */}
+        <header className="glass-topbar" style={{ height: 64, display: 'flex', alignItems: 'center', padding: '0 16px', gap: 12, flexShrink: 0, zIndex: 10 }}>
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="vw-mobile-only"
+            style={{ padding: 8, borderRadius: 8, border: 'none', background: 'transparent', color: '#404848', cursor: 'pointer', flexShrink: 0 }}
+          >
+            <Menu style={{ width: 20, height: 20 }} />
+          </button>
+
+          <span style={{ flex: 1, fontSize: 15, fontWeight: 600, color: '#1a1c1c', letterSpacing: '-0.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {PAGE_TITLES[activeView]}
+          </span>
+
+          {/* Live rate */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderRadius: 20, background: 'rgba(0,107,95,0.08)', border: '1px solid rgba(0,107,95,0.15)', flexShrink: 0 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#00897b', display: 'inline-block', animation: 'pulse-dot 2s ease-in-out infinite' }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#00897b' }}>
+              {summary ? `${fmt(summary.stats.todayPosts)} today` : 'Live'}
+            </span>
+          </div>
+
+          {/* Refresh */}
+          {lastUpdated && (
+            <span style={{ fontSize: 11, color: '#8da8a8', flexShrink: 0 }} className="vw-desktop-only">
+              {timeAgo(lastUpdated.toISOString())}
+            </span>
+          )}
+          <button
+            onClick={() => void loadSummary(true)}
+            disabled={refreshing}
+            style={{ width: 36, height: 36, borderRadius: 8, border: '1px solid rgba(13,61,61,0.12)', background: 'transparent', cursor: refreshing ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#707978', flexShrink: 0, opacity: refreshing ? 0.5 : 1 }}
+          >
+            <RefreshCw style={{ width: 15, height: 15 }} className={refreshing ? 'animate-spin' : ''} />
+          </button>
+
+          {/* View-only badge */}
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 20, background: 'rgba(0,137,123,0.08)', color: '#00897b', border: '1px solid rgba(0,137,123,0.18)', letterSpacing: '0.03em', flexShrink: 0 }}>
+            <Shield style={{ width: 11, height: 11 }} />
+            Read Only
+          </span>
+        </header>
+
+        {/* View content */}
+        <main className="view-content-scroll" style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+          {activeView === 'overview'  && summary && <OverviewView summary={summary} />}
+          {activeView === 'feed'      && api.current && <FeedView api={api.current} />}
+          {activeView === 'queue'     && api.current && <QueueView api={api.current} pendingCount={pendingCount} />}
+          {activeView === 'alerts'    && api.current && <AlertsView api={api.current} />}
+          {activeView === 'platform'  && summary && <PlatformView summary={summary} />}
+        </main>
+      </div>
     </div>
   );
 }
-
-// ── Styles ────────────────────────────────────────────────────────────────────
-
-const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap');
-
-:root {
-  --bg:            #f4f7f6;
-  --surface:       rgba(255,255,255,0.80);
-  --surface-hover: rgba(255,255,255,0.95);
-  --border:        rgba(13,61,61,0.09);
-  --brand:         #0d3d3d;
-  --accent:        #00897b;
-  --text-primary:  #0d3d3d;
-  --text-secondary:#2d5050;
-  --text-muted:    #6b8f8f;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg:            #0a1f1f;
-    --surface:       rgba(18,42,42,0.85);
-    --surface-hover: rgba(24,54,54,0.95);
-    --border:        rgba(255,255,255,0.07);
-    --brand:         #7ecfc9;
-    --accent:        #4db6ac;
-    --text-primary:  #d4eeec;
-    --text-secondary:#8ec8c4;
-    --text-muted:    #5a8888;
-  }
-}
-:root[data-theme="dark"] {
-  --bg:            #0a1f1f;
-  --surface:       rgba(18,42,42,0.85);
-  --surface-hover: rgba(24,54,54,0.95);
-  --border:        rgba(255,255,255,0.07);
-  --brand:         #7ecfc9;
-  --accent:        #4db6ac;
-  --text-primary:  #d4eeec;
-  --text-secondary:#8ec8c4;
-  --text-muted:    #5a8888;
-}
-
-*, *::before, *::after { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--text-primary); }
-
-/* Header */
-.site-header {
-  position: sticky; top: 0; z-index: 50;
-  background: var(--surface);
-  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--border);
-}
-.header-inner {
-  max-width: 1200px; margin: 0 auto;
-  padding: 0 24px; height: 56px;
-  display: flex; align-items: center; justify-content: space-between;
-}
-.logo-mark {
-  width: 32px; height: 32px; border-radius: 8px;
-  background: var(--brand); color: #fff;
-  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-}
-.logo-text {
-  font-family: 'Inter', sans-serif; font-size: 16px; font-weight: 700;
-  color: var(--text-primary); letter-spacing: -0.03em;
-}
-.logo-sub { font-weight: 400; opacity: 0.6; }
-.view-badge {
-  display: flex; align-items: center; gap: 5px;
-  font-size: 11px; font-weight: 600; letter-spacing: 0.03em;
-  padding: 2px 8px; border-radius: 20px;
-  background: rgba(0,137,123,0.10); color: #00897b;
-  border: 1px solid rgba(0,137,123,0.18);
-}
-.live-pill {
-  display: flex; align-items: center; gap: 6px;
-  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
-  padding: 3px 10px; border-radius: 20px;
-  background: rgba(0,137,123,0.10); color: #00897b;
-  border: 1px solid rgba(0,137,123,0.20);
-}
-.live-dot {
-  width: 6px; height: 6px; border-radius: 50%;
-  background: #00897b;
-  animation: pulse-dot 2s ease-in-out infinite;
-}
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50%       { opacity: 0.5; transform: scale(0.7); }
-}
-.refresh-btn {
-  display: flex; align-items: center; gap: 6px;
-  font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 500;
-  color: var(--text-muted); background: transparent;
-  border: 1px solid var(--border); border-radius: 8px;
-  padding: 5px 12px; cursor: pointer; transition: border-color .15s, color .15s;
-}
-.refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
-.refresh-btn:disabled { opacity: 0.5; cursor: default; }
-
-/* Mission */
-.mission-strip {
-  background: var(--brand); padding: 14px 24px;
-}
-.mission-text {
-  max-width: 1200px; margin: 0 auto;
-  font-size: 13px; line-height: 1.6; color: rgba(255,255,255,0.75);
-}
-
-/* Layout */
-.main-content {
-  max-width: 1200px; margin: 0 auto;
-  padding: 28px 24px 48px; display: flex; flex-direction: column; gap: 20px;
-}
-
-/* KPI grid */
-.kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 14px;
-}
-@media (min-width: 640px)  { .kpi-grid { grid-template-columns: repeat(3, 1fr); } }
-@media (min-width: 1024px) { .kpi-grid { grid-template-columns: repeat(5, 1fr); } }
-
-.kpi-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px; padding: 18px;
-  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-}
-.threat-card { border-width: 1.5px; transition: box-shadow .3s; }
-.kpi-eyebrow {
-  font-size: 10px; font-weight: 700; letter-spacing: 0.10em;
-  text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px;
-}
-.kpi-value {
-  font-family: 'DM Serif Display', Georgia, serif;
-  font-size: 30px; line-height: 1; color: var(--text-primary);
-  font-variant-numeric: tabular-nums;
-}
-.kpi-sub {
-  font-size: 11px; color: var(--text-muted); line-height: 1.5; margin-top: 6px;
-}
-
-/* Threat card */
-.threat-level-row {
-  display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px;
-}
-.threat-label {
-  font-family: 'DM Serif Display', Georgia, serif;
-  font-size: 26px; line-height: 1;
-}
-.threat-rate {
-  font-size: 12px; font-weight: 700; padding: 2px 8px;
-  border-radius: 6px; letter-spacing: 0.02em;
-}
-.threat-bar-track {
-  position: relative; height: 6px; border-radius: 3px;
-  background: var(--border); overflow: hidden; margin-bottom: 4px;
-}
-.threat-bar-fill {
-  height: 100%; border-radius: 3px; transition: width .6s ease;
-}
-.threat-bar-tick {
-  position: absolute; top: 0; bottom: 0; width: 1px;
-  background: rgba(255,255,255,0.5);
-}
-.threat-scale {
-  display: flex; justify-content: space-between;
-  font-size: 9px; color: var(--text-muted); letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-/* Mini chip */
-.mini-chip {
-  font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 5px;
-}
-
-/* Glass panel */
-.glass-panel {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px; padding: 20px;
-  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-}
-.panel-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 16px; }
-.panel-title {
-  margin: 0 0 4px; font-size: 14px; font-weight: 700; color: var(--text-primary);
-  font-family: 'Inter', sans-serif;
-}
-.panel-desc { margin: 0; font-size: 12px; color: var(--text-muted); line-height: 1.5; }
-
-/* Mid grid */
-.mid-grid { display: grid; gap: 20px; }
-@media (min-width: 900px) {
-  .mid-grid { grid-template-columns: 1fr 340px; }
-}
-.right-col { display: flex; flex-direction: column; gap: 20px; }
-
-/* Feed */
-.feed-panel { display: flex; flex-direction: column; }
-.feed-list {
-  flex: 1; overflow-y: auto; max-height: 520px;
-  display: flex; flex-direction: column; gap: 8px;
-}
-.feed-row {
-  padding: 10px 12px; border-radius: 10px;
-  background: rgba(13,61,61,0.03);
-  border: 1px solid var(--border);
-}
-.feed-row-meta {
-  display: flex; align-items: center; gap: 6px;
-  flex-wrap: wrap; margin-bottom: 6px;
-}
-.platform-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-.feed-platform { font-size: 11px; font-weight: 700; color: var(--text-secondary); }
-.feed-lang {
-  font-size: 10px; color: var(--text-muted);
-  padding: 1px 6px; border-radius: 4px; background: var(--border);
-}
-.verdict-chip {
-  font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 5px;
-}
-.confidence-bar-wrap {
-  width: 40px; height: 4px; border-radius: 2px;
-  background: var(--border); overflow: hidden; flex-shrink: 0;
-}
-.confidence-bar-fill { height: 100%; border-radius: 2px; opacity: 0.7; }
-.feed-time { margin-left: auto; font-size: 10px; color: var(--text-muted); white-space: nowrap; }
-.feed-content {
-  margin: 0; font-size: 12px; line-height: 1.55; color: var(--text-secondary);
-  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
-}
-
-/* Bars */
-.bar-track {
-  height: 6px; border-radius: 3px; background: var(--border); overflow: hidden;
-}
-.bar-fill {
-  height: 100%; border-radius: 3px; opacity: 0.75; transition: width .5s ease;
-}
-
-/* Sources grid */
-.sources-grid {
-  display: grid; gap: 10px;
-  grid-template-columns: repeat(2, 1fr);
-}
-@media (min-width: 640px)  { .sources-grid { grid-template-columns: repeat(3, 1fr); } }
-@media (min-width: 1024px) { .sources-grid { grid-template-columns: repeat(6, 1fr); } }
-
-.source-card {
-  padding: 12px 14px; border-radius: 10px;
-  background: rgba(13,61,61,0.03);
-  border: 1px solid var(--border);
-}
-
-/* Footer */
-.page-footer {
-  display: flex; align-items: center; gap: 10px; justify-content: center;
-  flex-wrap: wrap;
-  font-size: 11px; color: var(--text-muted); padding-top: 4px;
-}
-.footer-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--text-muted); opacity: 0.4; }
-
-/* Spinner */
-.spinner {
-  width: 32px; height: 32px; border-radius: 50%;
-  border: 3px solid var(--border);
-  border-top-color: var(--brand);
-  animation: spin .7s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-.spin { animation: spin .7s linear infinite; }
-
-/* Scrollbar */
-.feed-list::-webkit-scrollbar { width: 4px; }
-.feed-list::-webkit-scrollbar-track { background: transparent; }
-.feed-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-@media (prefers-reduced-motion: reduce) {
-  .live-dot, .spinner, .spin { animation: none; }
-  .threat-bar-fill, .bar-fill { transition: none; }
-}
-`;
