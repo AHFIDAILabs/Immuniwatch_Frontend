@@ -8,6 +8,7 @@ import { RetrainingProgressBanner } from "../components/RetrainingProgressBanner
 import { StatCard } from "../components/StatCard";
 import { FullPageSpinner } from "../components/Spinner";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { useViewerMode } from "../context/ViewerModeContext";
 import { formatPct, formatDateTime, LANG_FLAGS } from "../lib/utils";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -27,7 +28,8 @@ const TOOLTIP_STYLE = {
 };
 
 export default function ModelHealth() {
-  const qc = useQueryClient();
+  const qc           = useQueryClient();
+  const isViewerMode = useViewerMode();
 
   const { data: metrics, isLoading, isError: metricsError } = useQuery({
     queryKey: ["model-health", "metrics"],
@@ -97,14 +99,16 @@ export default function ModelHealth() {
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
           {pipeline && <ModelStatusBadge status={pipeline.status} />}
-          <button
-            onClick={() => triggerRetrain()}
-            disabled={triggering || pipeline?.status === "retraining"}
-            className="btn-primary flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-60"
-          >
-            <RefreshCw className={`h-4 w-4 ${triggering ? "animate-spin" : ""}`} />
-            Trigger Retrain
-          </button>
+          {!isViewerMode && (
+            <button
+              onClick={() => triggerRetrain()}
+              disabled={triggering || pipeline?.status === "retraining"}
+              className="btn-primary flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-60"
+            >
+              <RefreshCw className={`h-4 w-4 ${triggering ? "animate-spin" : ""}`} />
+              Trigger Retrain
+            </button>
+          )}
         </div>
       </div>
 

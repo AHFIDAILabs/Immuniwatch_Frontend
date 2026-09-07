@@ -8,6 +8,7 @@ import { EmptyState } from '../components/EmptyState';
 import { Modal } from '../components/Modal';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { useToast } from '../context/ToastContext';
+import { useViewerMode } from '../context/ViewerModeContext';
 import { formatDateTime, LANG_FLAGS } from '../lib/utils';
 import type { KBDocument, PostLanguage } from '../types/api';
 
@@ -124,8 +125,9 @@ function DocStatusChip({ status }: { status: string | undefined }) {
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 export default function KnowledgeBase() {
-  const qc   = useQueryClient();
-  const toast = useToast().toast;
+  const qc           = useQueryClient();
+  const toast        = useToast().toast;
+  const isViewerMode = useViewerMode();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
@@ -177,20 +179,22 @@ export default function KnowledgeBase() {
             Verified fact-check documents, advisories, and health guidelines
           </p>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => reindex()}
-            disabled={reindexing}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-xl transition-colors disabled:opacity-60"
-            style={{ border: '1px solid rgba(13,61,61,0.18)', color: '#4a6060', background: 'transparent' }}
-          >
-            <RefreshCw className={`h-4 w-4 ${reindexing ? 'animate-spin' : ''}`} />
-            Reindex All
-          </button>
-          <button onClick={() => setUploadOpen(true)} className="btn-primary flex items-center gap-1.5 px-4 py-2 text-sm">
-            <Upload className="h-4 w-4" /> Upload
-          </button>
-        </div>
+        {!isViewerMode && (
+          <div className="flex gap-2">
+            <button
+              onClick={() => reindex()}
+              disabled={reindexing}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-xl transition-colors disabled:opacity-60"
+              style={{ border: '1px solid rgba(13,61,61,0.18)', color: '#4a6060', background: 'transparent' }}
+            >
+              <RefreshCw className={`h-4 w-4 ${reindexing ? 'animate-spin' : ''}`} />
+              Reindex All
+            </button>
+            <button onClick={() => setUploadOpen(true)} className="btn-primary flex items-center gap-1.5 px-4 py-2 text-sm">
+              <Upload className="h-4 w-4" /> Upload
+            </button>
+          </div>
+        )}
       </div>
 
       {isError && <ErrorBanner message="Failed to load documents." />}
@@ -286,15 +290,17 @@ export default function KnowledgeBase() {
                     <td><DocStatusChip status={doc.status} /></td>
                     <td className="tabular-nums" style={{ color: '#8da8a8' }}>{formatDateTime(doc.createdAt)}</td>
                     <td>
-                      <button
-                        onClick={() => deleteDoc(doc._id)}
-                        className="p-1.5 rounded-lg transition-colors"
-                        style={{ color: '#8da8a8' }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#c0392b'; (e.currentTarget as HTMLElement).style.background = 'rgba(192,57,43,0.08)'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#8da8a8'; (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      {!isViewerMode && (
+                        <button
+                          onClick={() => deleteDoc(doc._id)}
+                          className="p-1.5 rounded-lg transition-colors"
+                          style={{ color: '#8da8a8' }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#c0392b'; (e.currentTarget as HTMLElement).style.background = 'rgba(192,57,43,0.08)'; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#8da8a8'; (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

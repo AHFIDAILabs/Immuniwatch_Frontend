@@ -10,6 +10,7 @@ import { FullPageSpinner } from "../components/Spinner";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { useToast } from "../context/ToastContext";
+import { useViewerMode } from "../context/ViewerModeContext";
 import { formatRelative, LANG_FLAGS, LANG_LABELS, PLATFORM_LABELS } from "../lib/utils";
 import type { Post, PostLanguage, PostPlatform } from "../types/api";
 
@@ -75,8 +76,9 @@ function HitlBadge({ post }: { post: Post }) {
 
 // ── Action button ─────────────────────────────────────────────────────────────
 function ActionButton({ post }: { post: Post }) {
-  const qc    = useQueryClient();
-  const toast = useToast().toast;
+  const qc           = useQueryClient();
+  const toast        = useToast().toast;
+  const isViewerMode = useViewerMode();
 
   const { mutate: doQueue, isPending } = useMutation({
     mutationFn: (priority: "standard" | "high") => hitlApi.queuePost(post._id, priority),
@@ -94,6 +96,7 @@ function ActionButton({ post }: { post: Post }) {
   });
 
   if (post.hitlReview) return <HitlBadge post={post} />;
+  if (isViewerMode) return null;
 
   const action = resolveAction(post);
   if (!action) return null;

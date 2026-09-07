@@ -7,6 +7,7 @@ import { FullPageSpinner } from '../components/Spinner';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { formatDateTime } from '../lib/utils';
+import { useViewerMode } from '../context/ViewerModeContext';
 import type { Alert } from '../types/api';
 
 const PAGE_SIZE = 20;
@@ -19,7 +20,8 @@ const SEVERITY_ACCENT: Record<string, { dot: string; bg: string }> = {
 };
 
 export default function Alerts() {
-  const qc = useQueryClient();
+  const qc           = useQueryClient();
+  const isViewerMode = useViewerMode();
   const [page, setPage] = useState(1);
   const [resolved, setResolved] = useState(false);
   const [resolveError, setResolveError] = useState('');
@@ -142,8 +144,8 @@ export default function Alerts() {
                   </p>
                 </div>
 
-                {/* Resolve action */}
-                {!alert.isResolved && (
+                {/* Resolve action — hidden in viewer mode */}
+                {!alert.isResolved && !isViewerMode && (
                   <button
                     onClick={() => resolve(alert._id)}
                     className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl flex-shrink-0 transition-colors"

@@ -83,3 +83,25 @@ export function useIsManager()    {
   const role = useAuth().user?.role;
   return role === 'org_admin' || role === 'supervisor' || role === 'super_admin';
 }
+
+// Fake auth provider for the read-only investor viewer — provides an org_admin
+// user context without making any real auth API calls.
+const VIEWER_USER: AuthUser = {
+  id:             'viewer-token',
+  name:           'Secure Viewer',
+  email:          '',
+  role:           'org_admin',
+  organizationId: null,
+  organization:   null,
+};
+
+export function ViewerAuthProvider({ children }: { children: ReactNode }) {
+  const value: AuthContextValue = {
+    user:          VIEWER_USER,
+    isLoading:     false,
+    isDeactivated: false,
+    login:         async () => { /* read-only */ },
+    logout:        async () => { window.location.href = '/'; },
+  };
+  return <AuthContext value={value}>{children}</AuthContext>;
+}

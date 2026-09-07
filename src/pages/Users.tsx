@@ -8,6 +8,7 @@ import { EmptyState } from "../components/EmptyState";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
+import { useViewerMode } from "../context/ViewerModeContext";
 import { formatDateTime, ROLE_LABELS } from "../lib/utils";
 import type { User, UserRole } from "../types/api";
 
@@ -288,12 +289,13 @@ type ActiveModal =
 
 export default function Users() {
   const { user: me } = useAuth();
-  const qc    = useQueryClient();
-  const toast = useToast().toast;
+  const qc           = useQueryClient();
+  const toast        = useToast().toast;
+  const isViewerMode = useViewerMode();
   const isSuperAdmin = me?.role === "super_admin";
   const isOrgAdmin   = me?.role === "org_admin";
-  const canEdit = isSuperAdmin || isOrgAdmin;
-  const canView = canEdit || me?.role === "supervisor";
+  const canEdit = !isViewerMode && (isSuperAdmin || isOrgAdmin);
+  const canView = canEdit || me?.role === "supervisor" || isOrgAdmin;
 
   const [modal, setModal] = useState<ActiveModal>(null);
 

@@ -10,6 +10,15 @@ export const api = axios.create({
   headers:         { 'Content-Type': 'application/json' },
 });
 
+// ── Viewer token injection ─────────────────────────────────────────────────────
+let __viewerToken: string | null = null;
+export function setViewerToken(t: string) { __viewerToken = t; }
+
+api.interceptors.request.use((cfg) => {
+  if (__viewerToken) cfg.headers['X-View-Token'] = __viewerToken;
+  return cfg;
+});
+
 // ── Silent token refresh on 401 ───────────────────────────────────────────────
 
 let isRefreshing = false;

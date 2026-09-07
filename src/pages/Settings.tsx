@@ -6,6 +6,7 @@ import { FullPageSpinner } from "../components/Spinner";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
+import { useViewerMode } from "../context/ViewerModeContext";
 import type { AppSettings } from "../types/api";
 
 // ── Number setting row ─────────────────────────────────────────────────────────
@@ -98,9 +99,10 @@ function NumberSetting({
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function Settings() {
-  const { user } = useAuth();
-  const qc       = useQueryClient();
-  const canEdit  = user?.role === "org_admin" || user?.role === "supervisor" || user?.role === "super_admin";
+  const { user }     = useAuth();
+  const qc           = useQueryClient();
+  const isViewerMode = useViewerMode();
+  const canEdit  = !isViewerMode && (user?.role === "org_admin" || user?.role === "supervisor" || user?.role === "super_admin");
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["settings"],

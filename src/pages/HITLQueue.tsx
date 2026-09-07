@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useViewerMode } from "../context/ViewerModeContext";
 import {
   Check, X, Edit3, Copy, CheckCheck, Loader2, Send, SkipForward,
   Brain, BookOpen, MessageSquare, ChevronRight, ShieldAlert,
@@ -427,6 +428,7 @@ function DetailPanel({
   onReject: (id: string) => void;
   onOverride: (r: HITLReview) => void;
 }) {
+  const isViewerMode = useViewerMode();
   const cls  = review.classificationId as {
     label: ClassificationLabel; confidence: number; suggestedResponse?: string;
     kbEvidence?: Array<{ title: string; summary?: string; snippet?: string; score?: number }>;
@@ -549,45 +551,47 @@ function DetailPanel({
         <p className="text-xs italic mb-4" style={{ color: "#4a6060" }}>Note: {review.reviewerNote}</p>
       )}
 
-      {/* Action buttons */}
-      <div className="mt-auto pt-4" style={{ borderTop: "1px solid rgba(13,61,61,0.08)" }}>
-        {review.status === "pending" ? (
-          <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={() => { if (!isActing) onApprove(review._id); }}
-              disabled={isActing}
-              className="btn-primary flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-              title="Approve (A)"
-            >
-              {isActing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-              Approve
-            </button>
-            {canOverride && (
+      {/* Action buttons — hidden in viewer mode */}
+      {!isViewerMode && (
+        <div className="mt-auto pt-4" style={{ borderTop: "1px solid rgba(13,61,61,0.08)" }}>
+          {review.status === "pending" ? (
+            <div className="flex gap-2 flex-wrap">
               <button
-                onClick={() => { if (!isActing) onOverride(review); }}
+                onClick={() => { if (!isActing) onApprove(review._id); }}
+                disabled={isActing}
+                className="btn-primary flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                title="Approve (A)"
+              >
+                {isActing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                Approve
+              </button>
+              {canOverride && (
+                <button
+                  onClick={() => { if (!isActing) onOverride(review); }}
+                  disabled={isActing}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  style={{ background: "rgba(217,119,6,0.08)", border: "1px solid rgba(217,119,6,0.25)", color: "#b45309" }}
+                  title="Override label (O)"
+                >
+                  <Edit3 className="h-3.5 w-3.5" /> Override
+                </button>
+              )}
+              <button
+                onClick={() => { if (!isActing) onReject(review._id); }}
                 disabled={isActing}
                 className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                style={{ background: "rgba(217,119,6,0.08)", border: "1px solid rgba(217,119,6,0.25)", color: "#b45309" }}
-                title="Override label (O)"
+                style={{ border: "1px solid rgba(13,61,61,0.15)", color: "#4a6060" }}
+                title="Reject (R)"
               >
-                <Edit3 className="h-3.5 w-3.5" /> Override
+                {isActing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+                Reject
               </button>
-            )}
-            <button
-              onClick={() => { if (!isActing) onReject(review._id); }}
-              disabled={isActing}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-              style={{ border: "1px solid rgba(13,61,61,0.15)", color: "#4a6060" }}
-              title="Reject (R)"
-            >
-              {isActing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
-              Reject
-            </button>
-          </div>
-        ) : (
-          <StatusBadge status={review.status} />
-        )}
-      </div>
+            </div>
+          ) : (
+            <StatusBadge status={review.status} />
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -609,13 +613,16 @@ function DetailPlaceholder({ total }: { total: number }) {
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 export default function HITLQueue() {
-  const qc    = useQueryClient();
-  const toast = useToast().toast;
-  const { user } = useAuth();
+  const qc           = useQueryClient();
+  const toast        = useToast().toast;
+  const { user }     = useAuth();
+  const isViewerMode = useViewerMode();
 
   const canOverride =
-    user?.role === "senior_analyst" || user?.role === "supervisor" ||
-    user?.role === "org_admin"      || user?.role === "super_admin";
+    !isViewerMode && (
+      user?.role === "senior_analyst" || user?.role === "supervisor" ||
+      user?.role === "org_admin"      || user?.role === "super_admin"
+    );
 
   const [page, setPage] = useState(1);
   const [priorityFilter, setPriorityFilter] = useState<HITLPriority | "all">("all");
@@ -681,9 +688,10 @@ export default function HITLQueue() {
     if (!selectedId && reviews.length > 0) setSelectedId(reviews[0]._id);
   }, [reviews.length]); // eslint-disable-line
 
-  // ── Keyboard shortcuts ──────────────────────────────────────────────────────
+  // ── Keyboard shortcuts (disabled in viewer mode) ────────────────────────────
   const handleKey = useCallback(
     (e: KeyboardEvent) => {
+      if (isViewerMode) return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       const id = selectedId ?? reviewsRef.current[0]?._id;
       if (!id) return;
@@ -695,7 +703,7 @@ export default function HITLQueue() {
         if (target) setOverrideTarget(target);
       }
     },
-    [selectedId, actingIds, approve, reject, canOverride],
+    [isViewerMode, selectedId, actingIds, approve, reject, canOverride],
   );
   useEffect(() => {
     window.addEventListener("keydown", handleKey);

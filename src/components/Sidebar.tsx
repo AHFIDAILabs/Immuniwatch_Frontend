@@ -5,9 +5,10 @@ import {
   LayoutDashboard, ClipboardCheck, Radio, Send,
   TrendingUp, BookOpen, Network, Activity,
   ScrollText, Users, Settings, ShieldCheck, LogOut, Bell,
-  Building2, Globe, X, MapPin,
+  Building2, Globe, X, MapPin, Eye,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useViewerMode } from '../context/ViewerModeContext';
 import { hitlApi } from '../api/hitl';
 import { ROLE_LABELS } from '../lib/utils';
 import type { UserRole } from '../types/api';
@@ -90,6 +91,7 @@ interface SidebarProps {
 export function Sidebar({ open, onClose }: SidebarProps) {
   const { user, logout } = useAuth();
   const location         = useLocation();
+  const isViewerMode     = useViewerMode();
   const isSuperAdmin     = user?.role === 'super_admin';
   const navSections      = isSuperAdmin ? PLATFORM_NAV : ORG_NAV;
 
@@ -208,22 +210,32 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             </p>
           </div>
         </div>
-        <button
-          onClick={() => { void logout(); }}
-          className="flex items-center gap-2 w-full text-xs font-medium transition-all rounded-lg px-3 py-2"
-          style={{ color: 'rgba(255,255,255,0.40)' }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.75)';
-            (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)';
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.40)';
-            (e.currentTarget as HTMLElement).style.background = 'transparent';
-          }}
-        >
-          <LogOut style={{ width: '14px', height: '14px' }} />
-          Sign out
-        </button>
+        {isViewerMode ? (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg"
+            style={{ background: 'rgba(167,243,208,0.07)', border: '1px solid rgba(167,243,208,0.12)' }}>
+            <Eye style={{ width: '14px', height: '14px', color: '#a7f3d0', flexShrink: 0 }} />
+            <span className="text-[11px] font-semibold" style={{ color: 'rgba(167,243,208,0.70)', fontFamily: '"Plus Jakarta Sans", sans-serif', letterSpacing: '0.03em' }}>
+              SECURE VIEW-ONLY ACCESS
+            </span>
+          </div>
+        ) : (
+          <button
+            onClick={() => { void logout(); }}
+            className="flex items-center gap-2 w-full text-xs font-medium transition-all rounded-lg px-3 py-2"
+            style={{ color: 'rgba(255,255,255,0.40)' }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.75)';
+              (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.40)';
+              (e.currentTarget as HTMLElement).style.background = 'transparent';
+            }}
+          >
+            <LogOut style={{ width: '14px', height: '14px' }} />
+            Sign out
+          </button>
+        )}
       </div>
     </aside>
   );
