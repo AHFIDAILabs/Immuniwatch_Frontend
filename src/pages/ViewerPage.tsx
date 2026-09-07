@@ -1,33 +1,15 @@
-import { useParams, MemoryRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useParams, Outlet } from 'react-router-dom';
 import { setViewerToken } from '../api/client';
 import { ViewerAuthProvider } from '../context/AuthContext';
 import ViewerModeContext from '../context/ViewerModeContext';
-import { Layout } from '../components/Layout';
-
-import Dashboard from './Dashboard';
-import Posts from './Posts';
-import HITLQueue from './HITLQueue';
-import Alerts from './Alerts';
-import ModelHealth from './ModelHealth';
-import KnowledgeBase from './KnowledgeBase';
-import Users from './Users';
-import AuditLog from './AuditLog';
-import TrendAnalysis from './TrendAnalysis';
-import ResponseDispatch from './ResponseDispatch';
-import IngestionPipeline from './IngestionPipeline';
-import Settings from './Settings';
-import GeoSurge from './GeoSurge';
 
 const VIEW_TOKEN_PARAM_REGEX = /^[0-9a-f]{64}$/;
 
 export default function ViewerPage() {
   const { token } = useParams<{ token: string }>();
-
   const isValid = !!token && VIEW_TOKEN_PARAM_REGEX.test(token);
 
-  // Set the token synchronously in the render phase so every API call from
-  // child components (Layout, page queries) already carries X-View-Token on
-  // the very first request — no useEffect delay.
+  // Set synchronously so every API call from child components carries the header.
   if (isValid) setViewerToken(token!);
 
   if (!isValid) {
@@ -42,31 +24,12 @@ export default function ViewerPage() {
     );
   }
 
-  // Render the full dashboard inside MemoryRouter so navigation stays
-  // internal (browser URL stays at /view/:token) and all NavLinks work.
+  // Viewer uses the real router (outer BrowserRouter) — no nested MemoryRouter.
+  // Child routes under /view/:token/* are declared in App.tsx.
   return (
     <ViewerModeContext.Provider value={true}>
       <ViewerAuthProvider>
-        <MemoryRouter initialEntries={['/dashboard']}>
-          <Routes>
-            <Route element={<Layout />}>
-              <Route path="/dashboard"     element={<Dashboard />} />
-              <Route path="/posts"         element={<Posts />} />
-              <Route path="/hitl"          element={<HITLQueue />} />
-              <Route path="/knowledge-base" element={<KnowledgeBase />} />
-              <Route path="/dispatch"      element={<ResponseDispatch />} />
-              <Route path="/trends"        element={<TrendAnalysis />} />
-              <Route path="/alerts"        element={<Alerts />} />
-              <Route path="/model-health"  element={<ModelHealth />} />
-              <Route path="/ingestion"     element={<IngestionPipeline />} />
-              <Route path="/geo-surge"     element={<GeoSurge />} />
-              <Route path="/users"         element={<Users />} />
-              <Route path="/audit-log"     element={<AuditLog />} />
-              <Route path="/settings"      element={<Settings />} />
-              <Route path="*"              element={<Navigate to="/dashboard" replace />} />
-            </Route>
-          </Routes>
-        </MemoryRouter>
+        <Outlet />
       </ViewerAuthProvider>
     </ViewerModeContext.Provider>
   );

@@ -48,7 +48,26 @@ export default function App() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<Login />} />
       <Route path="/submit" element={<Submit />} />
-      <Route path="/view/:token" element={<ViewerPage />} />
+      {/* ── Read-only investor viewer — /view/:token/* ──────────────────── */}
+      <Route path="/view/:token" element={<ViewerPage />}>
+        {/* Redirect bare /view/:token to /view/:token/dashboard */}
+        <Route index element={<Navigate to="dashboard" replace />} />
+        <Route element={<Layout />}>
+          <Route path="dashboard"     element={<Dashboard />} />
+          <Route path="posts"         element={<Posts />} />
+          <Route path="hitl"          element={<HITLQueue />} />
+          <Route path="knowledge-base" element={<KnowledgeBase />} />
+          <Route path="dispatch"      element={<ResponseDispatch />} />
+          <Route path="trends"        element={<TrendAnalysis />} />
+          <Route path="alerts"        element={<Alerts />} />
+          <Route path="model-health"  element={<ModelHealth />} />
+          <Route path="ingestion"     element={<IngestionPipeline />} />
+          <Route path="geo-surge"     element={<GeoSurge />} />
+          <Route path="users"         element={<Users />} />
+          <Route path="audit-log"     element={<AuditLog />} />
+          <Route path="settings"      element={<Settings />} />
+        </Route>
+      </Route>
       <Route path="/deactivated" element={<Deactivated />} />
       <Route path="/accept-invite/:token" element={<AcceptInvite />} />
       <Route path="/claim-org/:token" element={<ClaimOrg />} />

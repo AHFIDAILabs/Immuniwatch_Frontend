@@ -161,7 +161,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
               {visible.map(({ to, label, Icon, hitlBadge }) => (
                 <NavLink
                   key={to}
-                  to={to}
+                  to={isViewerMode ? to.slice(1) : to}
                   className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 mb-0.5 group"
                   style={({ isActive }) => isActive
                     ? { background: 'rgba(167,243,208,0.13)', color: '#ffffff', boxShadow: 'inset 0 0 0 1px rgba(167,243,208,0.12)' }

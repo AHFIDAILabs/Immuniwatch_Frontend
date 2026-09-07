@@ -6,6 +6,7 @@ import { api } from '../api/client';
 import { alertsApi } from '../api/alerts';
 import { Sidebar } from './Sidebar';
 import { ErrorBoundary } from './ErrorBoundary';
+import { useViewerMode } from '../context/ViewerModeContext';
 import type { Alert, AlertTriggerType } from '../types/api';
 
 const PAGE_TITLES: Record<string, string> = {
@@ -52,8 +53,9 @@ function relTime(iso: string): string {
 }
 
 export function Layout() {
-  const location = useLocation();
-  const navigate = useNavigate();
+  const location    = useLocation();
+  const navigate    = useNavigate();
+  const isViewerMode = useViewerMode();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen,   setNotifOpen]   = useState(false);
   const [readIds,     setReadIds]     = useState<Set<string>>(() => new Set());
@@ -69,7 +71,11 @@ export function Layout() {
 
   useEffect(() => { setNotifOpen(false); }, [location.pathname]);
 
-  const title = PAGE_TITLES[location.pathname] ?? 'Overview';
+  // In viewer mode the path is /view/:token/<page> — strip the prefix to look up the title.
+  const pagePath = isViewerMode
+    ? '/' + location.pathname.split('/').slice(3).join('/')
+    : location.pathname;
+  const title = PAGE_TITLES[pagePath] ?? 'Overview';
 
   const { data: liveStats } = useQuery({
     queryKey: ['stats', 'live'],
@@ -91,7 +97,8 @@ export function Layout() {
   function handleNotifClick(alert: Alert) {
     setReadIds((prev) => new Set([...prev, alert._id]));
     setNotifOpen(false);
-    navigate(TRIGGER_ROUTE[alert.triggerType] ?? '/alerts');
+    const dest = TRIGGER_ROUTE[alert.triggerType] ?? '/alerts';
+    navigate(isViewerMode ? dest.slice(1) : dest);
   }
 
   function markAllRead() {
@@ -245,8 +252,8 @@ export function Layout() {
                   style={{ color: '#00897b', borderTop: '1px solid #e9e8e7' }}
                   role="button"
                   tabIndex={0}
-                  onClick={() => { setNotifOpen(false); navigate('/alerts'); }}
-                  onKeyDown={(e) => e.key === 'Enter' && (setNotifOpen(false), navigate('/alerts'))}
+                  onClick={() => { setNotifOpen(false); navigate(isViewerMode ? 'alerts' : '/alerts'); }}
+                  onKeyDown={(e) => e.key === 'Enter' && (setNotifOpen(false), navigate(isViewerMode ? 'alerts' : '/alerts'))}
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#005048'; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#00897b'; }}
                 >
