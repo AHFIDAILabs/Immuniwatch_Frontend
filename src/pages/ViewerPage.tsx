@@ -3,11 +3,12 @@ import { setViewerToken } from '../api/client';
 import { ViewerAuthProvider } from '../context/AuthContext';
 import ViewerModeContext from '../context/ViewerModeContext';
 
-const VIEW_TOKEN_PARAM_REGEX = /^[0-9a-f]{64}$/;
-
 export default function ViewerPage() {
   const { token } = useParams<{ token: string }>();
-  const isValid = !!token && VIEW_TOKEN_PARAM_REGEX.test(token);
+
+  // Only check the token exists — the backend validates the actual value.
+  // A strict frontend regex here breaks valid tokens if casing or length differs slightly.
+  const isValid = !!token && token.length >= 16;
 
   // Set synchronously so every API call from child components carries the header.
   if (isValid) setViewerToken(token!);
