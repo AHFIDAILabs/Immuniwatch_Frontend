@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { useParams, MemoryRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { setViewerToken } from '../api/client';
 import { ViewerAuthProvider } from '../context/AuthContext';
@@ -24,13 +23,12 @@ const VIEW_TOKEN_PARAM_REGEX = /^[0-9a-f]{64}$/;
 export default function ViewerPage() {
   const { token } = useParams<{ token: string }>();
 
-  // Validate token format before doing anything else
   const isValid = !!token && VIEW_TOKEN_PARAM_REGEX.test(token);
 
-  useEffect(() => {
-    if (!isValid) return;
-    setViewerToken(token!);
-  }, [token, isValid]);
+  // Set the token synchronously in the render phase so every API call from
+  // child components (Layout, page queries) already carries X-View-Token on
+  // the very first request — no useEffect delay.
+  if (isValid) setViewerToken(token!);
 
   if (!isValid) {
     return (
